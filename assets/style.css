@@ -1,0 +1,62 @@
+:root {
+    --accent: #00d4aa;
+    --bg-dark: #0d1117;
+    --bg-card: #1a1f2e;
+    --text: #e6edf3;
+}
+
+body {
+    background-color: var(--bg-dark);
+    margin: 0;
+    padding: 0;
+}
+
+/* Optimización móvil */
+@media (max-width: 768px) {
+    .container-fluid {
+        padding: 10px !important;
+    }
+    
+    h2 {
+        font-size: 1.5rem !important;
+    }
+    
+    .card-body {
+        padding: 10px !important;
+    }
+    
+    .dash-graph {
+        height: 300px !important;
+    }
+}
+
+/* Estilo de los Dropdowns en modo oscuro */
+.Select-control, .VirtualizedSelectOption {
+    background-color: #252d3d !important;
+    color: white !important;
+    border-color: #30363d !important;
+}
+
+.Select-menu-outer {
+    background-color: #252d3d !important;
+    border-color: #30363d !important;
+}
+
+.is-focused:not(.is-opened) > .Select-control {
+    border-color: var(--accent) !important;
+}
+
+/* Animaciones suaves */
+.card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+}
+
+/* Ocultar barra de desplazamiento de Dash Table */
+.dash-spreadsheet-container {
+    border-radius: 8px !important;
+    overflow: hidden !important;
+}
