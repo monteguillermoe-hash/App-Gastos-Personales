@@ -637,19 +637,37 @@ def update_dashboard(data, start_date, end_date, rubros, subrubros, medios):
         if df.empty:
             return [], empty_fig, empty_fig, empty_fig, empty_fig, [], "0 registros"
 
-        # FIX: al deserializar el JSON las fechas vienen tz-aware (UTC).
-        # Se convierten a tz-naive para poder comparar con Timestamps simples.
+        # ── BUG FIX 1: pd.read_json puede devolver "Importe" como object/string.
+        # Forzar conversion numerica antes de cualquier operacion matematica.
+        df["Importe"] = pd.to_numeric(df["Importe"], errors="coerce")
+
+        # ── BUG FIX 2: columnas de texto pueden tener NaN despues de read_json;
+        # convertirlas a str limpio para que groupby y isin funcionen correctamente.
+        for col in ("Rubro Principal", "Sub-rubro", "Medio de Pago", "Concepto"):
+            df[col] = df[col].fillna("").astype(str).str.strip()
+
+        # ── BUG FIX 3: fechas tz-aware (UTC) tras deserializar -> convertir a naive.
         df["Fecha"] = (pd.to_datetime(df["Fecha"], utc=True)
-                         .dt.tz_convert(None)        # quita la tz → naive
-                         .dt.normalize())            # trunca a medianoche (00:00:00)
+                         .dt.tz_convert(None)   # elimina timezone -> naive
+                         .dt.normalize())       # trunca a medianoche 00:00:00
+
+        # ── BUG FIX 4: regenerar "Mes" y "Fecha_str" desde las fechas normalizadas
+        # (no confiar en la version pre-computada del store, que puede desincronizarse).
+        df["Mes"]       = df["Fecha"].dt.to_period("M").astype(str)
+        df["Fecha_str"] = df["Fecha"].dt.strftime("%d/%m/%Y")
+
+        # Eliminar filas donde Fecha o Importe son invalidos
+        df = df.dropna(subset=["Fecha", "Importe"])
+
+        if df.empty:
+            return [], empty_fig, empty_fig, empty_fig, empty_fig, [], "0 registros"
 
         # ── Aplicar filtros de fecha ──
-        # start_date / end_date llegan del DatePickerRange como "YYYY-MM-DD"
         if start_date:
-            start_ts = pd.Timestamp(start_date).normalize()   # tz-naive, medianoche
+            start_ts = pd.Timestamp(start_date).normalize()
             df = df[df["Fecha"] >= start_ts]
         if end_date:
-            end_ts = pd.Timestamp(end_date).normalize()        # tz-naive, medianoche
+            end_ts = pd.Timestamp(end_date).normalize()
             df = df[df["Fecha"] <= end_ts]
         if rubros:
             df = df[df["Rubro Principal"].isin(rubros)]
@@ -725,13 +743,14 @@ def update_dashboard(data, start_date, end_date, rubros, subrubros, medios):
 
         # ── Tabla ──
         df["Importe_fmt"] = df["Importe"].apply(lambda x: f"$ {x:,.2f}")
-        if "Fecha_str" not in df.columns:
-            df["Fecha_str"] = df["Fecha"].dt.strftime("%d/%m/%Y")
-
+        # "Fecha_str" ya fue regenerado desde fechas normalizadas
         table_cols = ["Fecha_str", "Concepto", "Importe_fmt",
                       "Rubro Principal", "Sub-rubro", "Medio de Pago"]
-        table_data  = (df[table_cols].sort_values("Fecha_str", ascending=False)
-                                     .to_dict("records"))
+        # Ordenar por datetime real, no por string DD/MM/YYYY
+        table_data = (df[table_cols + ["Fecha"]]
+                        .sort_values("Fecha", ascending=False)
+                        .drop(columns=["Fecha"])
+                        .to_dict("records"))
         count_label = f"{n_registros} registros · Total: $ {total:,.0f}"
 
         return kpis, fig_rubro, fig_medio, fig_evol, fig_sub, table_data, count_label
