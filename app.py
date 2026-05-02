@@ -206,6 +206,9 @@ def load_sheet_data():
             
         df = df[use_cols]
         
+        for col in ["Rubro Principal", "Sub-rubro", "Medio de Pago", "Concepto"]:
+            df[col] = df[col].astype(str).str.strip()
+            
         df["Fecha"] = pd.to_datetime(df["Fecha"], dayfirst=True, errors="coerce")
         df["Importe"] = pd.to_numeric(
             df["Importe"].astype(str).str.replace(",", ".").str.replace(" ", "").str.replace("$", ""),
@@ -547,9 +550,9 @@ def update_dashboard(data, start_date, end_date, rubros, subrubros, medios):
 
         # Aplicar filtros
         if start_date:
-            df = df[df["Fecha"] >= pd.to_datetime(start_date)]
+            df = df[df["Fecha"].dt.date >= pd.to_datetime(start_date).date()]
         if end_date:
-            df = df[df["Fecha"] <= pd.to_datetime(end_date)]
+            df = df[df["Fecha"].dt.date <= pd.to_datetime(end_date).date()]
         if rubros:
             df = df[df["Rubro Principal"].isin(rubros)]
         if subrubros:
