@@ -655,7 +655,40 @@ if __name__ == "__main__":
     print("=" * 60)
 
     app.run(debug=True, port=PORT, host="0.0.0.0")
-y_fig, empty_fig, empty_fig, [], "Error en callback")
+layout(
+            **PLOTLY_LAYOUT,
+            xaxis=dict(showgrid=True, gridcolor="#30363d"),
+            yaxis=dict(showgrid=True, gridcolor="#30363d",
+                       tickformat="$,.0f"),
+        )
+
+        # ── Top 8 Sub-rubros (barras verticales)
+        sub_df = (df.groupby("Sub-rubro")["Importe"].sum()
+                    .nlargest(8).reset_index().sort_values("Importe", ascending=True))
+        fig_sub = px.bar(
+            sub_df, x="Importe", y="Sub-rubro", orientation="h",
+            color="Sub-rubro", color_discrete_sequence=PALETTE,
+        )
+        fig_sub.update_layout(**PLOTLY_LAYOUT, showlegend=False,
+                               xaxis=dict(showgrid=True, gridcolor="#30363d",
+                                          tickformat="$,.0f"),
+                               yaxis=dict(showgrid=False))
+
+        # ── Tabla
+        df["Importe_fmt"] = df["Importe"].apply(lambda x: f"$ {x:,.2f}")
+        if "Fecha_str" not in df.columns:
+            df["Fecha_str"] = df["Fecha"].dt.strftime("%d/%m/%Y")
+        table_cols = ["Fecha_str", "Concepto", "Importe_fmt",
+                      "Rubro Principal", "Sub-rubro", "Medio de Pago"]
+        table_data = df[table_cols].sort_values("Fecha_str", ascending=False).to_dict("records")
+        count_label = f"{n_registros} registros · Total: $ {total:,.0f}"
+
+        return kpis, fig_rubro, fig_medio, fig_evol, fig_sub, table_data, count_label
+
+    except Exception:
+        print("🔥 Error en update_dashboard:")
+        traceback.print_exc()
+        return ([], empty_fig, empty_fig, empty_fig, empty_fig, [], "Error en callback")
 
 
 # ──────────────────────────────────────────────
