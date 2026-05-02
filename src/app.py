@@ -200,18 +200,38 @@ def load_sheet_data():
         header_g   = [h.strip() if h and h.strip() else f"Col_{i}" for i, h in enumerate(padded_g[0])]
         df = pd.DataFrame(padded_g[1:], columns=header_g)
         
-        use_cols = ["Fecha", "Concepto", "Importe", "Rubro Principal", "Sub-rubro", "Medio de Pago"]
-        existing = [c for c in use_cols if c in df.columns]
-        df = df[existing]
+        # Mapeo dinámico de columnas
+        col_map = {}
+        for col in df.columns:
+            cl = str(col).lower().strip()
+            if "fecha" in cl: col_map[col] = "Fecha"
+            elif "concepto" in cl or "detalle" in cl: col_map[col] = "Concepto"
+            elif "importe" in cl or "monto" in cl: col_map[col] = "Importe"
+            elif "rubro principal" in cl or cl == "rubro" or cl == "rubros": col_map[col] = "Rubro Principal"
+            elif "sub-rubro" in cl or "subrubro" in cl or "sub rubro" in cl: col_map[col] = "Sub-rubro"
+            elif "medio de pago" in cl or "medio" in cl: col_map[col] = "Medio de Pago"
+
+        df = df.rename(columns=col_map)
         
-        if "Fecha" in df.columns:
-            df["Fecha"] = pd.to_datetime(df["Fecha"], dayfirst=True, errors="coerce")
-        if "Importe" in df.columns:
-            df["Importe"] = pd.to_numeric(
-                df["Importe"].astype(str).str.replace(",", ".").str.replace(" ", "").str.replace("$", ""),
-                errors="coerce"
-            )
+        use_cols = ["Fecha", "Concepto", "Importe", "Rubro Principal", "Sub-rubro", "Medio de Pago"]
+        missing_cols = [c for c in use_cols if c not in df.columns]
+        
+        if missing_cols:
+            return None, None, f"error: Faltan columnas clave en la hoja. Esperaba: {', '.join(missing_cols)}. Leídas: {list(header_g)}"
+            
+        df = df[use_cols]
+        
+        df["Fecha"] = pd.to_datetime(df["Fecha"], dayfirst=True, errors="coerce")
+        df["Importe"] = pd.to_numeric(
+            df["Importe"].astype(str).str.replace(",", ".").str.replace(" ", "").str.replace("$", ""),
+            errors="coerce"
+        )
+        
         df = df.dropna(subset=["Fecha", "Importe"])
+        
+        if df.empty:
+            return pd.DataFrame(), {}, "empty"
+            
         df["Mes"] = df["Fecha"].dt.to_period("M").astype(str)
         df["Fecha_str"] = df["Fecha"].dt.strftime("%d/%m/%Y")
 
