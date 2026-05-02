@@ -204,12 +204,18 @@ def load_sheet_data():
         col_map = {}
         for col in df.columns:
             cl = str(col).lower().strip()
-            if "fecha" in cl: col_map[col] = "Fecha"
-            elif "concepto" in cl or "detalle" in cl: col_map[col] = "Concepto"
-            elif "importe" in cl or "monto" in cl: col_map[col] = "Importe"
-            elif "rubro principal" in cl or cl == "rubro" or cl == "rubros": col_map[col] = "Rubro Principal"
-            elif "sub-rubro" in cl or "subrubro" in cl or "sub rubro" in cl: col_map[col] = "Sub-rubro"
-            elif "medio de pago" in cl or "medio" in cl: col_map[col] = "Medio de Pago"
+            if cl in ["fecha", "fechas", "date", "día", "dia"]: 
+                col_map[col] = "Fecha"
+            elif cl in ["concepto", "detalle", "descripción", "descripcion", "gasto"]: 
+                col_map[col] = "Concepto"
+            elif cl in ["importe", "monto", "precio", "valor"]: 
+                col_map[col] = "Importe"
+            elif cl in ["rubro principal", "rubro", "rubros", "categoria", "categoría"]: 
+                col_map[col] = "Rubro Principal"
+            elif cl in ["sub-rubro", "subrubro", "sub rubro", "subcategoria", "subcategoría"]: 
+                col_map[col] = "Sub-rubro"
+            elif cl in ["medio de pago", "medio", "metodo de pago", "forma de pago", "pago"]: 
+                col_map[col] = "Medio de Pago"
 
         df = df.rename(columns=col_map)
         
