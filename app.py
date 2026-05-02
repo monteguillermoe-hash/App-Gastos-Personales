@@ -127,48 +127,27 @@ def load_listas(creds):
         if not values:
             return {"rubros": [], "subrubros": [], "medios": []}
 
-        # Detectar si la primera fila son ya los datos (si contiene valores conocidos)
-        known_keywords = ["gasto", "ahorro", "obra", "tarjeta", "efectivo", "cuidado"]
-        first_row_str = " ".join(values[0]).lower()
-        has_header = not any(kw in first_row_str for kw in known_keywords)
+        # Asumimos estructura fija basada en bot.py:
+        # Columna A (0): Rubros
+        # Columna B (1): Sub-rubros
+        # Columna C (2): Medios de Pago
         
-        if has_header:
-            header = [h.strip() for h in values[0]]
-            data   = values[1:]
-        else:
-            # Si no hay header, inventamos unos y usamos toda la data
-            header = [f"Col_{i}" for i in range(len(values[0]))]
-            data   = values
-
-        print(f"📋 Columnas detectadas en 'Listas': {header}")
-        data_padded = [r + [""] * (len(header) - len(r)) for r in data]
-        df_l = pd.DataFrame(data_padded, columns=header)
-
-        # Buscar columnas por nombre aproximado (sin importar mayúsculas/minúsculas)
-        def get_vals(possible_names, known_values=None):
-            possible_names = [p.lower() for p in possible_names]
-            # Intento 1: Por nombre de columna
-            for col in df_l.columns:
-                if col.lower() in possible_names:
-                    vals = sorted([str(v).strip() for v in df_l[col].replace("", pd.NA).dropna().unique()])
-                    if vals:
-                        print(f"✅ Encontrada columna '{col}' por nombre.")
-                        return vals
-            
-            # Intento 2: Por contenido (si no se encontró por nombre)
-            if known_values:
-                for col in df_l.columns:
-                    # Si alguno de los valores conocidos está en esta columna
-                    if any(val.lower() in [str(v).lower() for v in df_l[col]] for val in known_values):
-                        vals = sorted([str(v).strip() for v in df_l[col].replace("", pd.NA).dropna().unique()])
-                        print(f"✅ Encontrada columna '{col}' por contenido.")
-                        return vals
-            return []
-
+        rubros = []
+        subrubros = []
+        medios = []
+        
+        for row in values:
+            if len(row) > 0 and row[0].strip() and row[0].strip().lower() not in ["rubro", "rubros", "rubro principal"]:
+                rubros.append(row[0].strip())
+            if len(row) > 1 and row[1].strip() and row[1].strip().lower() not in ["sub-rubro", "subrubro", "subrubros"]:
+                subrubros.append(row[1].strip())
+            if len(row) > 2 and row[2].strip() and row[2].strip().lower() not in ["medio de pago", "medios de pago", "medio"]:
+                medios.append(row[2].strip())
+                
         return {
-            "rubros":    get_vals(["Rubro Principal", "Rubros", "Rubro"], ["Gasto Corriente", "Ahorro/Inversiones"]),
-            "subrubros": get_vals(["Sub-rubro", "Subrubros", "Subrubro"], ["Cuidado Personal", "Gastos Bancarios"]),
-            "medios":    get_vals(["Medio de Pago", "Medios", "Medio"], ["Efectivo", "Tarjeta"]),
+            "rubros": sorted(list(set(rubros))),
+            "subrubros": sorted(list(set(subrubros))),
+            "medios": sorted(list(set(medios))),
         }
     except Exception as e:
         print(f"⚠️ Error en load_listas: {e}")
@@ -659,6 +638,24 @@ def update_dashboard(data, start_date, end_date, rubros, subrubros, medios):
         print("🔥 Error en update_dashboard:")
         traceback.print_exc()
         return ([], empty_fig, empty_fig, empty_fig, empty_fig, [], "Error en callback")
+
+
+# ──────────────────────────────────────────────
+# Main
+# ──────────────────────────────────────────────
+if __name__ == "__main__":
+    print("=" * 60)
+    print("  💰 Dashboard Gastos Personales 2026")
+    print("=" * 60)
+    if SHEET_ID == "TU_SHEET_ID_AQUI":
+        print("\n  ⚠️  ACORDATE de editar SHEET_ID en app.py")
+        print("  El ID está en la URL de tu Google Sheet:")
+        print("  https://docs.google.com/spreadsheets/d/[ESTE_ES_EL_ID]/edit\n")
+    print(f"  🌐 Abrí: http://localhost:{PORT}")
+    print("=" * 60)
+
+    app.run(debug=True, port=PORT, host="0.0.0.0")
+y_fig, empty_fig, empty_fig, [], "Error en callback")
 
 
 # ──────────────────────────────────────────────
