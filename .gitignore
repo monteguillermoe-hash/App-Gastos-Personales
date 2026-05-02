@@ -11,3 +11,6 @@ venv.bak/
 credentials.json
 token.pickle
 .DS_Store
+token.json
+service_account.json
+credentials.json.json

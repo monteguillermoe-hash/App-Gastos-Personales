@@ -60,3 +60,18 @@ body {
     border-radius: 8px !important;
     overflow: hidden !important;
 }
+
+/* Forzar que los menús de los dropdown estén por encima */
+.Select-menu-outer {
+    z-index: 2000 !important;
+    position: relative !important;
+}
+
+/* Asegurar que los contenedores no tapen los dropdowns */
+.dash-spreadsheet-container,
+.card,
+.container,
+.row,
+.col {
+    overflow: visible !important;
+}

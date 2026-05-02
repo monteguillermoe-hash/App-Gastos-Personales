@@ -32,7 +32,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
-from flask import Flask, redirect, request, session, url_for
+from flask import Flask, redirect, request, session, url_for, send_from_directory
 from dash import Dash, dcc, html, dash_table, Input, Output, callback_context
 import dash_bootstrap_components as dbc
 from google_auth_oauthlib.flow import Flow
@@ -47,6 +47,7 @@ SHEET_ID         = os.getenv("SHEET_ID", "1R6CujT2y1BY24nTQID9mieOd2Bek_NpFzDVhx
 SHEET_RANGE      = "Gastos Personales 2026!A:Z"
 CREDENTIALS_FILE = os.getenv("CREDENTIALS_FILE", "credentials.json")
 SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE", "service_account.json")
+GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS")
 TOKEN_FILE       = os.getenv("TOKEN_FILE", "token.pickle")
 SECRET_KEY       = os.getenv("SECRET_KEY", "b36ac1d3ffaf7a5ba0cabd3299e1a5cee229111701bab640f3d273e04acfd870")
 PORT             = int(os.getenv("PORT", 8080))
@@ -74,6 +75,50 @@ app = Dash(
         {"name": "theme-color", "content": "#0d1117"}
     ]
 )
+
+# ──────────────────────────────────────────────
+# PWA Routes and Configuration
+# ──────────────────────────────────────────────
+@server.route('/manifest.json')
+def serve_manifest():
+    return send_from_directory('assets', 'manifest.json')
+
+@server.route('/sw.js')
+def serve_sw():
+    return send_from_directory('assets', 'sw.js')
+
+app.index_string = '''
+<!DOCTYPE html>
+<html>
+    <head>
+        {%metas%}
+        <title>{%title%}</title>
+        {%favicon%}
+        {%css%}
+        <link rel="manifest" href="/manifest.json">
+        <link rel="apple-touch-icon" href="/assets/icon-192.png">
+    </head>
+    <body>
+        {%app_entry%}
+        <footer>
+            {%config%}
+            {%scripts%}
+            {%renderer%}
+        </footer>
+        <script>
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/sw.js').then(function(registration) {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    }, function(err) {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+                });
+            }
+        </script>
+    </body>
+</html>
+'''
 
 
 # ──────────────────────────────────────────────
@@ -153,15 +198,26 @@ def load_listas(creds):
 
 def load_sheet_data():
     """Carga los datos de gastos y las listas maestras"""
-    # 1. Intentar con Service Account (Ideal para producción/móvil)
     creds = None
-    if os.path.exists(SERVICE_ACCOUNT_FILE):
+    
+    # 0. Intentar desde variable de entorno (Render)
+    if GOOGLE_CREDENTIALS_JSON:
+        try:
+            creds_info = json.loads(GOOGLE_CREDENTIALS_JSON)
+            creds = service_account.Credentials.from_service_account_info(
+                creds_info, scopes=SCOPES)
+            print("🚀 Usando Service Account desde variable de entorno.")
+        except Exception as e:
+            print(f"⚠️ Error cargando GOOGLE_CREDENTIALS JSON: {e}")
+
+    # 1. Intentar con Service Account si no se cargó del entorno (Ideal para producción/móvil)
+    if not creds and os.path.exists(SERVICE_ACCOUNT_FILE):
         try:
             creds = service_account.Credentials.from_service_account_file(
                 SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-            print("🚀 Usando Service Account para la conexión.")
+            print("🚀 Usando Service Account de archivo local.")
         except Exception as e:
-            print(f"⚠️ Error cargando Service Account: {e}")
+            print(f"⚠️ Error cargando Service Account de archivo: {e}")
 
     # 2. Si no hay Service Account, usar OAuth tradicional
     if not creds:
