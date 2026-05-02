@@ -577,7 +577,10 @@ def populate_filters(data):
         listas = store.get("listas", {})
 
         if not df.empty:
-            df["Fecha"] = pd.to_datetime(df["Fecha"])
+            # FIX: mismo tratamiento tz-naive para calcular min/max correctamente
+            df["Fecha"] = (pd.to_datetime(df["Fecha"], utc=True)
+                             .dt.tz_convert(None)
+                             .dt.normalize())
 
         # Prioridad: Listas maestras > valores únicos del DataFrame
         rubros    = listas.get("rubros")    or sorted(df["Rubro Principal"].dropna().unique().tolist())
@@ -634,13 +637,20 @@ def update_dashboard(data, start_date, end_date, rubros, subrubros, medios):
         if df.empty:
             return [], empty_fig, empty_fig, empty_fig, empty_fig, [], "0 registros"
 
-        df["Fecha"] = pd.to_datetime(df["Fecha"])
+        # FIX: al deserializar el JSON las fechas vienen tz-aware (UTC).
+        # Se convierten a tz-naive para poder comparar con Timestamps simples.
+        df["Fecha"] = (pd.to_datetime(df["Fecha"], utc=True)
+                         .dt.tz_convert(None)        # quita la tz → naive
+                         .dt.normalize())            # trunca a medianoche (00:00:00)
 
-        # ── Aplicar filtros ──
+        # ── Aplicar filtros de fecha ──
+        # start_date / end_date llegan del DatePickerRange como "YYYY-MM-DD"
         if start_date:
-            df = df[df["Fecha"].dt.date >= pd.to_datetime(start_date).date()]
+            start_ts = pd.Timestamp(start_date).normalize()   # tz-naive, medianoche
+            df = df[df["Fecha"] >= start_ts]
         if end_date:
-            df = df[df["Fecha"].dt.date <= pd.to_datetime(end_date).date()]
+            end_ts = pd.Timestamp(end_date).normalize()        # tz-naive, medianoche
+            df = df[df["Fecha"] <= end_ts]
         if rubros:
             df = df[df["Rubro Principal"].isin(rubros)]
         if subrubros:
