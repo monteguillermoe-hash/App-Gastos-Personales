@@ -1,78 +1,150 @@
-:root {
-    --accent: #00d4aa;
-    --bg-dark: #0d1117;
-    --bg-card: #1a1f2e;
-    --text: #e6edf3;
-}
+/* ════════════════════════════════════════════════════
+   GASTOS PERSONALES 2026 — style.css
+   Fix: z-index dropdowns + overflow visible en cards
+   ════════════════════════════════════════════════════ */
 
-body {
-    background-color: var(--bg-dark);
-    margin: 0;
-    padding: 0;
-}
+/* ── 1. Dropdowns de Dash/React-Select ── */
 
-/* Optimización móvil */
-@media (max-width: 768px) {
-    .container-fluid {
-        padding: 10px !important;
-    }
-    
-    h2 {
-        font-size: 1.5rem !important;
-    }
-    
-    .card-body {
-        padding: 10px !important;
-    }
-    
-    .dash-graph {
-        height: 300px !important;
-    }
-}
-
-/* Estilo de los Dropdowns en modo oscuro */
-.Select-control, .VirtualizedSelectOption {
-    background-color: #252d3d !important;
-    color: white !important;
-    border-color: #30363d !important;
-}
-
-.Select-menu-outer {
-    background-color: #252d3d !important;
-    border-color: #30363d !important;
-}
-
-.is-focused:not(.is-opened) > .Select-control {
-    border-color: var(--accent) !important;
-}
-
-/* Animaciones suaves */
-.card {
-    transition: transform 0.2s ease-in-out;
-}
-
-.card:hover {
-    transform: translateY(-2px);
-}
-
-/* Ocultar barra de desplazamiento de Dash Table */
-.dash-spreadsheet-container {
-    border-radius: 8px !important;
-    overflow: hidden !important;
-}
-
-/* Forzar que los menús de los dropdown estén por encima */
+/* El menú desplegable siempre por encima de todo */
 .Select-menu-outer {
     z-index: 2000 !important;
-    position: relative !important;
+    position: absolute !important;   /* absolute, NO relative */
 }
 
-/* Asegurar que los contenedores no tapen los dropdowns */
-.dash-spreadsheet-container,
+/* El control (input visible) necesita contexto de apilamiento */
+.Select.is-open {
+    z-index: 2001 !important;
+}
+
+/* Nuevo React-Select (versión ≥ 5 que usa dash-core-components ≥ 2.x) */
+.dash-dropdown .Select__menu,
+.dash-dropdown .Select__menu-list,
+[class$="__menu"],
+[class$="-menu"] {
+    z-index: 2000 !important;
+    position: absolute !important;
+}
+
+/* ── 2. Eliminar overflow:hidden en contenedores que tapan el menú ── */
+
+/* Bootstrap cards y columnas */
 .card,
-.container,
-.row,
-.col,
-[class*="col-"] {
+.card-body,
+.card-header {
     overflow: visible !important;
+}
+
+/* Filas y columnas de Bootstrap */
+.row,
+[class^="col"],
+[class*=" col"] {
+    overflow: visible !important;
+}
+
+/* Contenedores de Dash */
+.container,
+.container-fluid,
+.dash-dropdown {
+    overflow: visible !important;
+}
+
+/* ── 3. DataTable: sí puede tener overflow-x para scroll horizontal ── */
+.dash-spreadsheet-container {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+}
+
+/* ── 4. Estilo general dark para los dropdowns ── */
+.Select-control {
+    background-color: #252d3d !important;
+    border-color: #30363d !important;
+    color: #e6edf3 !important;
+    border-radius: 6px !important;
+}
+
+.Select-value-label,
+.Select-placeholder,
+.Select-input > input {
+    color: #e6edf3 !important;
+}
+
+.Select-menu-outer {
+    background-color: #1a1f2e !important;
+    border: 1px solid #30363d !important;
+    border-radius: 6px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
+}
+
+.Select-option {
+    background-color: #1a1f2e !important;
+    color: #e6edf3 !important;
+}
+
+.Select-option:hover,
+.Select-option.is-focused {
+    background-color: #252d3d !important;
+    color: #00d4aa !important;
+}
+
+.Select-option.is-selected {
+    background-color: #00d4aa22 !important;
+    color: #00d4aa !important;
+}
+
+/* Multi-value tags */
+.Select-value {
+    background-color: #00d4aa22 !important;
+    border-color: #00d4aa55 !important;
+    color: #00d4aa !important;
+    border-radius: 4px !important;
+}
+
+.Select-value-icon {
+    border-right-color: #00d4aa55 !important;
+    color: #00d4aa !important;
+}
+
+.Select-value-icon:hover {
+    background-color: #00d4aa44 !important;
+    color: #fff !important;
+}
+
+/* ── 5. DatePickerRange dark ── */
+.DateInput_input {
+    background-color: #252d3d !important;
+    color: #e6edf3 !important;
+    border-color: #30363d !important;
+    border-radius: 6px !important;
+}
+
+.DateRangePickerInput {
+    background-color: #252d3d !important;
+    border-color: #30363d !important;
+    border-radius: 6px !important;
+}
+
+.DayPicker,
+.DayPicker_portal,
+.DateRangePicker_picker {
+    z-index: 3000 !important;
+    background-color: #1a1f2e !important;
+}
+
+/* ── 6. Scrollbar personalizado ── */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #0d1117;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #30363d;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #00d4aa;
 }
