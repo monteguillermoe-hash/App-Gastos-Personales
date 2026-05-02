@@ -35,10 +35,10 @@ from src.auth import get_google_credentials
 # ═══════════════════════════════════════════════
 #  ⚙️  CONFIGURACIÓN — LEER DESDE VARIABLES DE ENTORNO
 # ═══════════════════════════════════════════════
-SHEET_ID         = os.getenv("SHEET_ID", "1R6CujT2y1BY24nTQID9mieOd2Bek_NpFzDVhxC4f2T4")
-SHEET_RANGE      = "Gastos Personales 2026!A:Z"
-SECRET_KEY       = os.getenv("SECRET_KEY", "b36ac1d3ffaf7a5ba0cabd3299e1a5cee229111701bab640f3d273e04acfd870")
-PORT             = int(os.getenv("PORT", 8080))
+SHEET_ID    = os.getenv("SHEET_ID", "1R6CujT2y1BY24nTQID9mieOd2Bek_NpFzDVhxC4f2T4")
+SHEET_RANGE = "Gastos Personales 2026!A:Z"
+SECRET_KEY  = os.getenv("SECRET_KEY", "b36ac1d3ffaf7a5ba0cabd3299e1a5cee229111701bab640f3d273e04acfd870")
+PORT        = int(os.getenv("PORT", 8080))
 # ═══════════════════════════════════════════════
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
@@ -54,28 +54,31 @@ app = Dash(
     __name__,
     server=server,
     url_base_pathname="/dashboard/",
+    # assets_folder cargará automáticamente assets/style.css
     external_stylesheets=[dbc.themes.CYBORG],
     suppress_callback_exceptions=True,
     title="💰 Gastos 2026",
     meta_tags=[
-        {"name": "viewport", "content": "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"},
+        {"name": "viewport",
+         "content": "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"},
         {"name": "apple-mobile-web-app-capable", "content": "yes"},
-        {"name": "theme-color", "content": "#0d1117"}
-    ]
+        {"name": "theme-color",                  "content": "#0d1117"},
+    ],
 )
 
 # ──────────────────────────────────────────────
-# PWA Routes and Configuration
+# PWA Routes
 # ──────────────────────────────────────────────
-@server.route('/manifest.json')
+@server.route("/manifest.json")
 def serve_manifest():
-    return send_from_directory('assets', 'manifest.json')
+    return send_from_directory("assets", "manifest.json")
 
-@server.route('/sw.js')
+@server.route("/sw.js")
 def serve_sw():
-    return send_from_directory('assets', 'sw.js')
+    return send_from_directory("assets", "sw.js")
 
-app.index_string = '''
+
+app.index_string = """
 <!DOCTYPE html>
 <html>
     <head>
@@ -95,146 +98,168 @@ app.index_string = '''
         </footer>
         <script>
             if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                    navigator.serviceWorker.register('/sw.js').then(function(registration) {
-                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                    }, function(err) {
-                        console.log('ServiceWorker registration failed: ', err);
-                    });
+                window.addEventListener('load', function () {
+                    navigator.serviceWorker.register('/sw.js')
+                        .then(r  => console.log('SW registrado:', r.scope))
+                        .catch(e => console.log('SW error:', e));
                 });
             }
         </script>
     </body>
 </html>
-'''
+"""
 
 
 # ──────────────────────────────────────────────
 # Google Sheets helpers
 # ──────────────────────────────────────────────
 
-
-
 def load_listas(creds):
-    """Carga las categorías maestras desde la pestaña Listas"""
+    """
+    Carga las categorías maestras desde la pestaña 'Listas'.
+    Estructura esperada (con encabezado en fila 1):
+        Col A → Rubro Principal
+        Col B → Sub-rubro
+        Col C → Medio de Pago
+    CORRECCIÓN: se salta la fila 0 (encabezado) con values[1:]
+    para evitar que los títulos de columna aparezcan como opciones.
+    """
     try:
         service = build("sheets", "v4", credentials=creds)
-        result = service.spreadsheets().values().get(
-            spreadsheetId=SHEET_ID,
-            range="Listas!A:Z"
-        ).execute()
+        result  = (service.spreadsheets().values()
+                          .get(spreadsheetId=SHEET_ID, range="Listas!A:Z")
+                          .execute())
         values = result.get("values", [])
+
         if not values:
+            print("⚠️  Pestaña 'Listas' vacía o sin datos.")
             return {"rubros": [], "subrubros": [], "medios": []}
 
-        # Asumimos estructura fija basada en bot.py:
-        # Columna A (0): Rubros
-        # Columna B (1): Sub-rubros
-        # Columna C (2): Medios de Pago
-        
-        rubros = []
+        # ── FIX PRINCIPAL: saltar la fila de encabezado explícitamente ──
+        data_rows = values[1:]          # values[0] = encabezados → se descarta
+
+        rubros    = []
         subrubros = []
-        medios = []
-        
-        for row in values:
-            if len(row) > 0 and row[0].strip() and row[0].strip().lower() not in ["rubro", "rubros", "rubro principal"]:
-                rubros.append(row[0].strip())
-            if len(row) > 1 and row[1].strip() and row[1].strip().lower() not in ["sub-rubro", "subrubro", "subrubros"]:
-                subrubros.append(row[1].strip())
-            if len(row) > 2 and row[2].strip() and row[2].strip().lower() not in ["medio de pago", "medios de pago", "medio"]:
-                medios.append(row[2].strip())
-                
-        return {
-            "rubros": sorted(list(set(rubros))),
-            "subrubros": sorted(list(set(subrubros))),
-            "medios": sorted(list(set(medios))),
+        medios    = []
+
+        for row in data_rows:
+            # Columna A — Rubro Principal
+            val_a = row[0].strip() if len(row) > 0 and row[0].strip() else None
+            if val_a:
+                rubros.append(val_a)
+
+            # Columna B — Sub-rubro
+            val_b = row[1].strip() if len(row) > 1 and row[1].strip() else None
+            if val_b:
+                subrubros.append(val_b)
+
+            # Columna C — Medio de Pago
+            val_c = row[2].strip() if len(row) > 2 and row[2].strip() else None
+            if val_c:
+                medios.append(val_c)
+
+        result_listas = {
+            "rubros":    sorted(set(rubros)),
+            "subrubros": sorted(set(subrubros)),
+            "medios":    sorted(set(medios)),
         }
+        print(f"✅ Listas cargadas → rubros:{len(result_listas['rubros'])}  "
+              f"subrubros:{len(result_listas['subrubros'])}  "
+              f"medios:{len(result_listas['medios'])}")
+        return result_listas
+
     except Exception as e:
-        print(f"⚠️ Error en load_listas: {e}")
+        print(f"⚠️  Error en load_listas: {e}")
+        traceback.print_exc()
         return {"rubros": [], "subrubros": [], "medios": []}
 
 
 def load_sheet_data():
-    """Carga los datos de gastos y las listas maestras"""
+    """Carga los datos de gastos y las listas maestras desde Google Sheets."""
     try:
         creds = get_google_credentials()
     except Exception as e:
+        print(f"⚠️  No se obtuvieron credenciales: {e}")
         return None, None, "no_auth"
-        
+
     try:
-        service  = build("sheets", "v4", credentials=creds)
-        
-        # 1. Leer Gastos (Hoja: Gastos Personales 2026)
-        RANGE_GASTOS = "Gastos Personales 2026!A:Z"
-        res_gastos = service.spreadsheets().values().get(
-            spreadsheetId=SHEET_ID, range=RANGE_GASTOS
-        ).execute()
-        
+        service = build("sheets", "v4", credentials=creds)
+
+        # 1. Hoja de Gastos
+        res_gastos = (service.spreadsheets().values()
+                             .get(spreadsheetId=SHEET_ID, range="Gastos Personales 2026!A:Z")
+                             .execute())
+
         values_g = res_gastos.get("values", [])
         if not values_g:
             return pd.DataFrame(), {}, "empty"
-            
-        max_cols_g = max(len(row) for row in values_g)
-        padded_g   = [row + [""] * (max_cols_g - len(row)) for row in values_g]
-        header_g   = [h.strip() if h and h.strip() else f"Col_{i}" for i, h in enumerate(padded_g[0])]
-        df = pd.DataFrame(padded_g[1:], columns=header_g)
-        
-        # Mapeo dinámico de columnas
+
+        max_cols = max(len(r) for r in values_g)
+        padded   = [r + [""] * (max_cols - len(r)) for r in values_g]
+        header   = [h.strip() if h and h.strip() else f"Col_{i}"
+                    for i, h in enumerate(padded[0])]
+        df = pd.DataFrame(padded[1:], columns=header)
+
+        # Mapeo dinámico de columnas (tolerante a variaciones de nombre)
         col_map = {}
         for col in df.columns:
             cl = str(col).lower().strip()
-            if cl in ["fecha", "fechas", "date", "día", "dia"]: 
+            if   cl in ("fecha", "fechas", "date", "día", "dia"):
                 col_map[col] = "Fecha"
-            elif cl in ["concepto", "detalle", "descripción", "descripcion", "gasto"]: 
+            elif cl in ("concepto", "detalle", "descripción", "descripcion", "gasto"):
                 col_map[col] = "Concepto"
-            elif cl in ["importe", "monto", "precio", "valor"]: 
+            elif cl in ("importe", "monto", "precio", "valor"):
                 col_map[col] = "Importe"
-            elif cl in ["rubro principal", "rubro", "rubros", "categoria", "categoría"]: 
+            elif cl in ("rubro principal", "rubro", "rubros", "categoria", "categoría"):
                 col_map[col] = "Rubro Principal"
-            elif cl in ["sub-rubro", "subrubro", "sub rubro", "subcategoria", "subcategoría"]: 
+            elif cl in ("sub-rubro", "subrubro", "sub rubro", "subcategoria", "subcategoría"):
                 col_map[col] = "Sub-rubro"
-            elif cl in ["medio de pago", "medio", "metodo de pago", "forma de pago", "pago"]: 
+            elif cl in ("medio de pago", "medio", "metodo de pago", "forma de pago", "pago"):
                 col_map[col] = "Medio de Pago"
 
         df = df.rename(columns=col_map)
-        
-        use_cols = ["Fecha", "Concepto", "Importe", "Rubro Principal", "Sub-rubro", "Medio de Pago"]
-        missing_cols = [c for c in use_cols if c not in df.columns]
-        
-        if missing_cols:
-            return None, None, f"error: Faltan columnas clave en la hoja. Esperaba: {', '.join(missing_cols)}. Leídas: {list(header_g)}"
-            
-        df = df[use_cols]
-        
-        for col in ["Rubro Principal", "Sub-rubro", "Medio de Pago", "Concepto"]:
+
+        use_cols    = ["Fecha", "Concepto", "Importe", "Rubro Principal", "Sub-rubro", "Medio de Pago"]
+        missing     = [c for c in use_cols if c not in df.columns]
+        if missing:
+            msg = f"error: Faltan columnas: {', '.join(missing)}. Leídas: {list(header)}"
+            return None, None, msg
+
+        df = df[use_cols].copy()
+
+        for col in ("Rubro Principal", "Sub-rubro", "Medio de Pago", "Concepto"):
             df[col] = df[col].astype(str).str.strip()
-            
-        df["Fecha"] = pd.to_datetime(df["Fecha"], dayfirst=True, errors="coerce")
+
+        df["Fecha"]   = pd.to_datetime(df["Fecha"], dayfirst=True, errors="coerce")
         df["Importe"] = pd.to_numeric(
-            df["Importe"].astype(str).str.replace(",", ".").str.replace(" ", "").str.replace("$", ""),
-            errors="coerce"
+            df["Importe"].astype(str)
+                         .str.replace(",", ".", regex=False)
+                         .str.replace(" ", "", regex=False)
+                         .str.replace("$", "", regex=False),
+            errors="coerce",
         )
-        
+
         df = df.dropna(subset=["Fecha", "Importe"])
-        
+
         if df.empty:
             return pd.DataFrame(), {}, "empty"
-            
-        df["Mes"] = df["Fecha"].dt.to_period("M").astype(str)
+
+        df["Mes"]      = df["Fecha"].dt.to_period("M").astype(str)
         df["Fecha_str"] = df["Fecha"].dt.strftime("%d/%m/%Y")
 
-        # 2. Cargar Listas Maestras
+        # 2. Listas maestras
         listas = load_listas(creds)
 
         return df, listas, "ok"
-        
+
     except Exception as e:
         print(f"🔥 Error en load_sheet_data: {e}")
+        traceback.print_exc()
         return None, None, f"error: {e}"
 
 
 # ──────────────────────────────────────────────
-# OAuth routes
+# OAuth redirect
 # ──────────────────────────────────────────────
 @server.route("/")
 def index():
@@ -267,14 +292,35 @@ def stat_card(title, value, icon, color=ACCENT):
             html.P(title, style={"color": MUTED, "margin": "0", "fontSize": ".85rem"}),
             html.H4(value, style={"color": color, "margin": "0", "fontWeight": "bold"}),
         ]),
-        style={"background": BG_CARD, "border": f"1px solid {color}22",
-               "borderRadius": "12px", "textAlign": "center"},
+        style={
+            "background": BG_CARD,
+            "border": f"1px solid {color}22",
+            "borderRadius": "12px",
+            "textAlign": "center",
+        },
     )
 
 
 # ──────────────────────────────────────────────
-# Layout del dashboard
+# Layout
 # ──────────────────────────────────────────────
+
+# ── Estilos inline para que los dropdowns nunca queden tapados ──
+DROPDOWN_STYLE = {
+    "background": "#252d3d",
+    # overflow visible es clave: sin esto el menú queda cortado por el card padre
+    "overflow": "visible",
+    "position": "relative",
+    "zIndex": 1000,
+}
+
+FILTER_CARD_BODY_STYLE = {
+    # El CardBody también debe permitir overflow visible
+    "overflow": "visible",
+    "position": "relative",
+    "zIndex": 900,
+}
+
 app.layout = dbc.Container(
     fluid=True,
     style={"background": BG_DARK, "minHeight": "100vh", "padding": "20px"},
@@ -282,7 +328,7 @@ app.layout = dbc.Container(
         dcc.Store(id="store-data"),
         dcc.Interval(id="load-trigger", interval=500, max_intervals=1),
 
-        # Header
+        # ── Header ──
         dbc.Row([
             dbc.Col([
                 html.H2("💰 Gastos Personales 2026",
@@ -293,89 +339,129 @@ app.layout = dbc.Container(
             dbc.Col([
                 dbc.Button("🔄 Actualizar", id="btn-refresh", color="success",
                            outline=True, size="sm", className="me-2"),
-
             ], width=3, className="text-end d-flex align-items-center justify-content-end"),
         ], className="mb-4 align-items-center"),
 
-        # Alerta de estado
+        # ── Estado ──
         html.Div(id="alert-status"),
 
-        # ── Filtros ────────────────────────────────────────────
-        dbc.Card([
-            dbc.CardBody([
+        # ── Filtros ──
+        # FIX z-index: overflow visible en Card y CardBody
+        dbc.Card(
+            dbc.CardBody(
                 dbc.Row([
                     dbc.Col([
-                        html.Label("📅 Rango de fechas", style={"color": MUTED, "fontSize": ".85rem"}),
+                        html.Label("📅 Rango de fechas",
+                                   style={"color": MUTED, "fontSize": ".85rem"}),
                         dcc.DatePickerRange(
                             id="filter-dates",
                             display_format="DD/MM/YYYY",
                             style={"width": "100%"},
                         ),
                     ], xs=12, md=4),
-                    dbc.Col([
-                        html.Label("📁 Rubro", style={"color": MUTED, "fontSize": ".85rem"}),
-                        dcc.Dropdown(id="filter-rubro", multi=True, placeholder="Todos",
-                                     style={"background": "#252d3d"}),
-                    ], xs=12, md=3),
-                    dbc.Col([
-                        html.Label("🏷️ Sub-rubro", style={"color": MUTED, "fontSize": ".85rem"}),
-                        dcc.Dropdown(id="filter-subrubro", multi=True, placeholder="Todos",
-                                     style={"background": "#252d3d"}),
-                    ], xs=12, md=3),
-                    dbc.Col([
-                        html.Label("💳 Medio de pago", style={"color": MUTED, "fontSize": ".85rem"}),
-                        dcc.Dropdown(id="filter-medio", multi=True, placeholder="Todos",
-                                     style={"background": "#252d3d"}),
-                    ], xs=12, md=2),
-                ], className="g-3"),
-            ])
-        ], style={"background": BG_CARD, "border": "1px solid #30363d",
-                  "borderRadius": "12px", "marginBottom": "20px"}),
 
-        # ── KPI Cards ──────────────────────────────────────────
+                    dbc.Col([
+                        html.Label("📁 Rubro",
+                                   style={"color": MUTED, "fontSize": ".85rem"}),
+                        dcc.Dropdown(
+                            id="filter-rubro",
+                            multi=True,
+                            placeholder="Todos",
+                            style=DROPDOWN_STYLE,
+                            # optionHeight para textos largos
+                            optionHeight=38,
+                        ),
+                    ], xs=12, md=3, style={"overflow": "visible", "zIndex": 900}),
+
+                    dbc.Col([
+                        html.Label("🏷️ Sub-rubro",
+                                   style={"color": MUTED, "fontSize": ".85rem"}),
+                        dcc.Dropdown(
+                            id="filter-subrubro",
+                            multi=True,
+                            placeholder="Todos",
+                            style=DROPDOWN_STYLE,
+                            optionHeight=38,
+                        ),
+                    ], xs=12, md=3, style={"overflow": "visible", "zIndex": 850}),
+
+                    dbc.Col([
+                        html.Label("💳 Medio de pago",
+                                   style={"color": MUTED, "fontSize": ".85rem"}),
+                        dcc.Dropdown(
+                            id="filter-medio",
+                            multi=True,
+                            placeholder="Todos",
+                            style=DROPDOWN_STYLE,
+                            optionHeight=38,
+                        ),
+                    ], xs=12, md=2, style={"overflow": "visible", "zIndex": 800}),
+
+                ], className="g-3"),
+                style=FILTER_CARD_BODY_STYLE,
+            ),
+            style={
+                "background": BG_CARD,
+                "border": "1px solid #30363d",
+                "borderRadius": "12px",
+                "marginBottom": "20px",
+                # FIX CLAVE: el card no debe recortar el dropdown con overflow hidden
+                "overflow": "visible",
+            },
+        ),
+
+        # ── KPI Cards ──
         dbc.Row(id="kpi-row", className="mb-4 g-3"),
 
-        # ── Gráficos fila 1 ────────────────────────────────────
+        # ── Gráficos fila 1 ──
         dbc.Row([
             dbc.Col([
                 dbc.Card([
                     dbc.CardHeader("📊 Gastos por Rubro",
                                    style={"background": BG_CARD, "color": TEXT,
                                           "borderBottom": "1px solid #30363d"}),
-                    dbc.CardBody(dcc.Graph(id="chart-rubro", config={"displayModeBar": False})),
-                ], style={"background": BG_CARD, "border": "1px solid #30363d", "borderRadius": "12px"}),
+                    dbc.CardBody(dcc.Graph(id="chart-rubro",
+                                          config={"displayModeBar": False})),
+                ], style={"background": BG_CARD, "border": "1px solid #30363d",
+                          "borderRadius": "12px"}),
             ], xs=12, lg=6),
             dbc.Col([
                 dbc.Card([
                     dbc.CardHeader("🥧 Distribución por Medio de Pago",
                                    style={"background": BG_CARD, "color": TEXT,
                                           "borderBottom": "1px solid #30363d"}),
-                    dbc.CardBody(dcc.Graph(id="chart-medio", config={"displayModeBar": False})),
-                ], style={"background": BG_CARD, "border": "1px solid #30363d", "borderRadius": "12px"}),
+                    dbc.CardBody(dcc.Graph(id="chart-medio",
+                                          config={"displayModeBar": False})),
+                ], style={"background": BG_CARD, "border": "1px solid #30363d",
+                          "borderRadius": "12px"}),
             ], xs=12, lg=6),
         ], className="mb-4 g-3"),
 
-        # ── Gráficos fila 2 ────────────────────────────────────
+        # ── Gráficos fila 2 ──
         dbc.Row([
             dbc.Col([
                 dbc.Card([
                     dbc.CardHeader("📈 Evolución Mensual de Gastos",
                                    style={"background": BG_CARD, "color": TEXT,
                                           "borderBottom": "1px solid #30363d"}),
-                    dbc.CardBody(dcc.Graph(id="chart-evolucion", config={"displayModeBar": False})),
-                ], style={"background": BG_CARD, "border": "1px solid #30363d", "borderRadius": "12px"}),
+                    dbc.CardBody(dcc.Graph(id="chart-evolucion",
+                                          config={"displayModeBar": False})),
+                ], style={"background": BG_CARD, "border": "1px solid #30363d",
+                          "borderRadius": "12px"}),
             ], xs=12, lg=8),
             dbc.Col([
                 dbc.Card([
                     dbc.CardHeader("🏷️ Top 8 Sub-rubros",
                                    style={"background": BG_CARD, "color": TEXT,
                                           "borderBottom": "1px solid #30363d"}),
-                    dbc.CardBody(dcc.Graph(id="chart-subrubro", config={"displayModeBar": False})),
-                ], style={"background": BG_CARD, "border": "1px solid #30363d", "borderRadius": "12px"}),
+                    dbc.CardBody(dcc.Graph(id="chart-subrubro",
+                                          config={"displayModeBar": False})),
+                ], style={"background": BG_CARD, "border": "1px solid #30363d",
+                          "borderRadius": "12px"}),
             ], xs=12, lg=4),
         ], className="mb-4 g-3"),
 
-        # ── Tabla ──────────────────────────────────────────────
+        # ── Tabla ──
         dbc.Card([
             dbc.CardHeader(
                 dbc.Row([
@@ -391,12 +477,12 @@ app.layout = dbc.Container(
                 dash_table.DataTable(
                     id="tabla-gastos",
                     columns=[
-                        {"name": "Fecha",          "id": "Fecha_str"},
-                        {"name": "Concepto",        "id": "Concepto"},
-                        {"name": "Importe ($)",     "id": "Importe_fmt"},
-                        {"name": "Rubro",           "id": "Rubro Principal"},
-                        {"name": "Sub-rubro",       "id": "Sub-rubro"},
-                        {"name": "Medio",           "id": "Medio de Pago"},
+                        {"name": "Fecha",       "id": "Fecha_str"},
+                        {"name": "Concepto",    "id": "Concepto"},
+                        {"name": "Importe ($)", "id": "Importe_fmt"},
+                        {"name": "Rubro",       "id": "Rubro Principal"},
+                        {"name": "Sub-rubro",   "id": "Sub-rubro"},
+                        {"name": "Medio",       "id": "Medio de Pago"},
                     ],
                     page_size=15,
                     sort_action="native",
@@ -434,9 +520,9 @@ app.layout = dbc.Container(
 # Callbacks
 # ──────────────────────────────────────────────
 
-# 1. Carga inicial y actualización
+# 1. Carga inicial / Actualizar
 @app.callback(
-    Output("store-data",  "data"),
+    Output("store-data",   "data"),
     Output("alert-status", "children"),
     Input("load-trigger",  "n_intervals"),
     Input("btn-refresh",   "n_clicks"),
@@ -453,15 +539,19 @@ def load_data(_, __):
             style={"borderRadius": "8px", "marginBottom": "16px"},
         )
     if status == "empty":
-        return None, dbc.Alert("La hoja está vacía.", color="info",
-                                style={"borderRadius": "8px", "marginBottom": "16px"})
+        return None, dbc.Alert(
+            "La hoja está vacía.", color="info",
+            style={"borderRadius": "8px", "marginBottom": "16px"},
+        )
     if status.startswith("error"):
-        return None, dbc.Alert(f"Error al cargar datos: {status}",
-                                color="danger", style={"borderRadius": "8px", "marginBottom": "16px"})
+        return None, dbc.Alert(
+            f"Error al cargar datos: {status}", color="danger",
+            style={"borderRadius": "8px", "marginBottom": "16px"},
+        )
 
     store = {
-        "df": df.to_json(date_format="iso", orient="split"),
-        "listas": listas
+        "df":     df.to_json(date_format="iso", orient="split"),
+        "listas": listas,
     }
     return json.dumps(store), None
 
@@ -481,45 +571,45 @@ def populate_filters(data):
     try:
         if not data:
             return [], [], [], None, None, None, None
-        
-        store = json.loads(data)
-        df = pd.read_json(io.StringIO(store["df"]), orient="split")
+
+        store  = json.loads(data)
+        df     = pd.read_json(io.StringIO(store["df"]), orient="split")
+        listas = store.get("listas", {})
+
         if not df.empty:
             df["Fecha"] = pd.to_datetime(df["Fecha"])
-        
-        listas = store.get("listas", {})
-        
-        if df.empty and not listas.get("rubros"):
-            return [], [], [], None, None, None, None
-            
-        # 1. Rubros (Listas > Datos)
-        rubros = listas.get("rubros") or sorted(df["Rubro Principal"].dropna().unique())
-        
-        # 2. Sub-rubros (Listas > Datos)
-        subrubros = listas.get("subrubros") or sorted(df["Sub-rubro"].dropna().unique())
-        
-        # 3. Medios de pago (Listas > Datos)
-        medios = listas.get("medios") or sorted(df["Medio de Pago"].dropna().unique())
 
-        mk = lambda lst: [{"label": v, "value": v} for v in lst]
-        mn = df["Fecha"].min().date() if not df.empty else None
-        mx = df["Fecha"].max().date() if not df.empty else None
+        # Prioridad: Listas maestras > valores únicos del DataFrame
+        rubros    = listas.get("rubros")    or sorted(df["Rubro Principal"].dropna().unique().tolist())
+        subrubros = listas.get("subrubros") or sorted(df["Sub-rubro"].dropna().unique().tolist())
+        medios    = listas.get("medios")    or sorted(df["Medio de Pago"].dropna().unique().tolist())
+
+        # Filtrar cadenas vacías que pudieran colarse
+        rubros    = [v for v in rubros    if v and str(v).strip()]
+        subrubros = [v for v in subrubros if v and str(v).strip()]
+        medios    = [v for v in medios    if v and str(v).strip()]
+
+        mk  = lambda lst: [{"label": v, "value": v} for v in lst]
+        mn  = df["Fecha"].min().date() if not df.empty else None
+        mx  = df["Fecha"].max().date() if not df.empty else None
+
         return mk(rubros), mk(subrubros), mk(medios), mn, mx, mn, mx
+
     except Exception:
         print("🔥 Error en populate_filters:")
         traceback.print_exc()
         return [], [], [], None, None, None, None
 
 
-# 3. Actualizar todo el dashboard con los filtros
+# 3. Actualizar dashboard
 @app.callback(
-    Output("kpi-row",        "children"),
-    Output("chart-rubro",    "figure"),
-    Output("chart-medio",    "figure"),
-    Output("chart-evolucion","figure"),
-    Output("chart-subrubro", "figure"),
-    Output("tabla-gastos",   "data"),
-    Output("table-count",    "children"),
+    Output("kpi-row",         "children"),
+    Output("chart-rubro",     "figure"),
+    Output("chart-medio",     "figure"),
+    Output("chart-evolucion", "figure"),
+    Output("chart-subrubro",  "figure"),
+    Output("tabla-gastos",    "data"),
+    Output("table-count",     "children"),
     Input("store-data",       "data"),
     Input("filter-dates",     "start_date"),
     Input("filter-dates",     "end_date"),
@@ -528,27 +618,25 @@ def populate_filters(data):
     Input("filter-medio",     "value"),
 )
 def update_dashboard(data, start_date, end_date, rubros, subrubros, medios):
+    empty_fig = go.Figure(layout={
+        **PLOTLY_LAYOUT,
+        "annotations": [{"text": "Sin datos", "showarrow": False,
+                          "font": {"color": MUTED, "size": 16}}],
+    })
+
+    if not data:
+        return [], empty_fig, empty_fig, empty_fig, empty_fig, [], "Sin datos"
+
     try:
-        empty_fig = go.Figure(layout={**PLOTLY_LAYOUT,
-                                       "annotations": [{"text": "Sin datos", "showarrow": False,
-                                                         "font": {"color": MUTED, "size": 16}}]})
-        empty = [[], [], empty_fig, empty_fig, empty_fig, empty_fig, "0 registros"]
-
-        if not data:
-            return (
-                [],
-                empty_fig, empty_fig, empty_fig, empty_fig,
-                [], "Sin datos"
-            )
-
         store = json.loads(data)
-        df = pd.read_json(io.StringIO(store["df"]), orient="split")
+        df    = pd.read_json(io.StringIO(store["df"]), orient="split")
+
         if df.empty:
-             return ([], empty_fig, empty_fig, empty_fig, empty_fig, [], "0 registros")
-             
+            return [], empty_fig, empty_fig, empty_fig, empty_fig, [], "0 registros"
+
         df["Fecha"] = pd.to_datetime(df["Fecha"])
 
-        # Aplicar filtros
+        # ── Aplicar filtros ──
         if start_date:
             df = df[df["Fecha"].dt.date >= pd.to_datetime(start_date).date()]
         if end_date:
@@ -561,22 +649,22 @@ def update_dashboard(data, start_date, end_date, rubros, subrubros, medios):
             df = df[df["Medio de Pago"].isin(medios)]
 
         if df.empty:
-            return ([], empty_fig, empty_fig, empty_fig, empty_fig, [], "0 registros")
+            return [], empty_fig, empty_fig, empty_fig, empty_fig, [], "0 registros"
 
         total       = df["Importe"].sum()
         promedio    = df["Importe"].mean()
         n_registros = len(df)
         top_rubro   = df.groupby("Rubro Principal")["Importe"].sum().idxmax()
 
-        # KPI cards
+        # ── KPI cards ──
         kpis = dbc.Row([
-            dbc.Col(stat_card("Total Gastado",  f"$ {total:,.0f}",      "💸"),  xs=6, md=3),
-            dbc.Col(stat_card("Registros",      str(n_registros),        "📋", "#58a6ff"), xs=6, md=3),
-            dbc.Col(stat_card("Promedio/gasto", f"$ {promedio:,.0f}",   "📊", "#d2a8ff"), xs=6, md=3),
-            dbc.Col(stat_card("Mayor rubro",    top_rubro,               "🏆", "#ffa657"), xs=6, md=3),
+            dbc.Col(stat_card("Total Gastado",  f"$ {total:,.0f}",    "💸"),          xs=6, md=3),
+            dbc.Col(stat_card("Registros",      str(n_registros),      "📋", "#58a6ff"), xs=6, md=3),
+            dbc.Col(stat_card("Promedio/gasto", f"$ {promedio:,.0f}", "📊", "#d2a8ff"), xs=6, md=3),
+            dbc.Col(stat_card("Mayor rubro",    top_rubro,             "🏆", "#ffa657"), xs=6, md=3),
         ], className="g-3")
 
-        # ── Gráfico Rubro (barras horizontales)
+        # ── Gráfico Rubro ──
         rubro_df = (df.groupby("Rubro Principal")["Importe"].sum()
                       .reset_index().sort_values("Importe", ascending=True))
         fig_rubro = px.bar(
@@ -589,8 +677,8 @@ def update_dashboard(data, start_date, end_date, rubros, subrubros, medios):
                                  xaxis=dict(showgrid=True, gridcolor="#30363d"),
                                  yaxis=dict(showgrid=False))
 
-        # ── Gráfico Medio de pago (torta)
-        medio_df = df.groupby("Medio de Pago")["Importe"].sum().reset_index()
+        # ── Gráfico Medio de pago ──
+        medio_df  = df.groupby("Medio de Pago")["Importe"].sum().reset_index()
         fig_medio = px.pie(
             medio_df, values="Importe", names="Medio de Pago",
             color_discrete_sequence=PALETTE, hole=0.45,
@@ -599,9 +687,9 @@ def update_dashboard(data, start_date, end_date, rubros, subrubros, medios):
                                  textfont_size=12)
         fig_medio.update_layout(**PLOTLY_LAYOUT)
 
-        # ── Evolución mensual (líneas por rubro)
-        evol_df = (df.groupby(["Mes", "Rubro Principal"])["Importe"].sum()
-                     .reset_index().sort_values("Mes"))
+        # ── Evolución mensual ──
+        evol_df  = (df.groupby(["Mes", "Rubro Principal"])["Importe"].sum()
+                      .reset_index().sort_values("Mes"))
         fig_evol = px.line(
             evol_df, x="Mes", y="Importe", color="Rubro Principal",
             markers=True, color_discrete_sequence=PALETTE,
@@ -610,13 +698,12 @@ def update_dashboard(data, start_date, end_date, rubros, subrubros, medios):
         fig_evol.update_layout(
             **PLOTLY_LAYOUT,
             xaxis=dict(showgrid=True, gridcolor="#30363d"),
-            yaxis=dict(showgrid=True, gridcolor="#30363d",
-                       tickformat="$,.0f"),
+            yaxis=dict(showgrid=True, gridcolor="#30363d", tickformat="$,.0f"),
         )
 
-        # ── Top 8 Sub-rubros (barras verticales)
-        sub_df = (df.groupby("Sub-rubro")["Importe"].sum()
-                    .nlargest(8).reset_index().sort_values("Importe", ascending=True))
+        # ── Top 8 Sub-rubros ──
+        sub_df  = (df.groupby("Sub-rubro")["Importe"].sum()
+                     .nlargest(8).reset_index().sort_values("Importe", ascending=True))
         fig_sub = px.bar(
             sub_df, x="Importe", y="Sub-rubro", orientation="h",
             color="Sub-rubro", color_discrete_sequence=PALETTE,
@@ -626,13 +713,15 @@ def update_dashboard(data, start_date, end_date, rubros, subrubros, medios):
                                           tickformat="$,.0f"),
                                yaxis=dict(showgrid=False))
 
-        # ── Tabla
+        # ── Tabla ──
         df["Importe_fmt"] = df["Importe"].apply(lambda x: f"$ {x:,.2f}")
         if "Fecha_str" not in df.columns:
             df["Fecha_str"] = df["Fecha"].dt.strftime("%d/%m/%Y")
+
         table_cols = ["Fecha_str", "Concepto", "Importe_fmt",
                       "Rubro Principal", "Sub-rubro", "Medio de Pago"]
-        table_data = df[table_cols].sort_values("Fecha_str", ascending=False).to_dict("records")
+        table_data  = (df[table_cols].sort_values("Fecha_str", ascending=False)
+                                     .to_dict("records"))
         count_label = f"{n_registros} registros · Total: $ {total:,.0f}"
 
         return kpis, fig_rubro, fig_medio, fig_evol, fig_sub, table_data, count_label
@@ -640,7 +729,7 @@ def update_dashboard(data, start_date, end_date, rubros, subrubros, medios):
     except Exception:
         print("🔥 Error en update_dashboard:")
         traceback.print_exc()
-        return ([], empty_fig, empty_fig, empty_fig, empty_fig, [], "Error en callback")
+        return [], empty_fig, empty_fig, empty_fig, empty_fig, [], "Error en callback"
 
 
 # ──────────────────────────────────────────────
@@ -650,11 +739,6 @@ if __name__ == "__main__":
     print("=" * 60)
     print("  💰 Dashboard Gastos Personales 2026")
     print("=" * 60)
-    if SHEET_ID == "TU_SHEET_ID_AQUI":
-        print("\n  ⚠️  ACORDATE de editar SHEET_ID en app.py")
-        print("  El ID está en la URL de tu Google Sheet:")
-        print("  https://docs.google.com/spreadsheets/d/[ESTE_ES_EL_ID]/edit\n")
     print(f"  🌐 Abrí: http://localhost:{PORT}")
     print("=" * 60)
-
     app.run(debug=True, port=PORT, host="0.0.0.0")
