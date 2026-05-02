@@ -655,13 +655,3 @@ if __name__ == "__main__":
     print("=" * 60)
 
     app.run(debug=True, port=PORT, host="0.0.0.0")
-es 2026")
-    print("=" * 60)
-    if SHEET_ID == "TU_SHEET_ID_AQUI":
-        print("\n  ⚠️  ACORDATE de editar SHEET_ID en app.py")
-        print("  El ID está en la URL de tu Google Sheet:")
-        print("  https://docs.google.com/spreadsheets/d/[ESTE_ES_EL_ID]/edit\n")
-    print(f"  🌐 Abrí: http://localhost:{PORT}")
-    print("=" * 60)
-
-    app.run(debug=True, port=PORT, host="0.0.0.0")
