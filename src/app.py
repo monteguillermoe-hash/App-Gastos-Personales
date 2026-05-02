@@ -6,49 +6,37 @@
 ║                                                                          ║
 ║  1. Instalá dependencias:                                                ║
 ║     pip install dash dash-bootstrap-components plotly pandas             ║
-║          google-auth-oauthlib google-api-python-client flask             ║
+║          google-api-python-client flask                                  ║
 ║                                                                          ║
-║  2. Completá las variables en la sección CONFIGURACIÓN más abajo:        ║
-║     - SHEET_ID: el ID de tu Google Sheet (está en la URL)                ║
-║     - CREDENTIALS_FILE: tu archivo credentials.json de Google Cloud      ║
+║  2. Asegurate de tener configurada la variable de entorno                ║
+║     GOOGLE_CREDENTIALS con el JSON de tu Service Account de Google.      ║
 ║                                                                          ║
 ║  3. Ejecutá:  python app.py                                              ║
-║     Abrí:     http://localhost:5000                                      ║
+║     Abrí:     http://localhost:8080                                      ║
 ║                                                                          ║
-║  CÓMO OBTENER credentials.json:                                          ║
-║  → console.cloud.google.com → APIs & Services → Credentials              ║
-║  → Create Credentials → OAuth 2.0 Client ID → Desktop App               ║
-║  → Descargá el JSON y ponelo junto a app.py como "credentials.json"     ║
-║  → Activá la API: Google Sheets API en tu proyecto                      ║
+║  Despliegue en Render:                                                   ║
+║  La app está lista para desplegarse configurando las variables de        ║
+║  entorno GOOGLE_CREDENTIALS y TELEGRAM_TOKEN en Render.                  ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 """
 
-import os, json, pickle, threading, webbrowser, traceback, io
-
-# ⚠️ IMPORTANTE: Setear esto ANTES de cualquier otro import de google
-os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"  # Solo para localhost
+import os, json, traceback, io
 
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
-from flask import Flask, redirect, request, session, url_for, send_from_directory
-from dash import Dash, dcc, html, dash_table, Input, Output, callback_context
+from flask import Flask, redirect, request, send_from_directory
+from dash import Dash, dcc, html, dash_table, Input, Output
 import dash_bootstrap_components as dbc
-from google_auth_oauthlib.flow import Flow
-from google.auth.transport.requests import Request
-from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from src.auth import get_google_credentials
 
 # ═══════════════════════════════════════════════
 #  ⚙️  CONFIGURACIÓN — LEER DESDE VARIABLES DE ENTORNO
 # ═══════════════════════════════════════════════
 SHEET_ID         = os.getenv("SHEET_ID", "1R6CujT2y1BY24nTQID9mieOd2Bek_NpFzDVhxC4f2T4")
 SHEET_RANGE      = "Gastos Personales 2026!A:Z"
-CREDENTIALS_FILE = os.getenv("CREDENTIALS_FILE", "credentials.json")
-SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE", "service_account.json")
-GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS")
-TOKEN_FILE       = os.getenv("TOKEN_FILE", "token.pickle")
 SECRET_KEY       = os.getenv("SECRET_KEY", "b36ac1d3ffaf7a5ba0cabd3299e1a5cee229111701bab640f3d273e04acfd870")
 PORT             = int(os.getenv("PORT", 8080))
 # ═══════════════════════════════════════════════
@@ -124,16 +112,7 @@ app.index_string = '''
 # ──────────────────────────────────────────────
 # Google Sheets helpers
 # ──────────────────────────────────────────────
-def get_credentials():
-    creds = None
-    if os.path.exists(TOKEN_FILE):
-        with open(TOKEN_FILE, "rb") as f:
-            creds = pickle.load(f)
-    if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        with open(TOKEN_FILE, "wb") as f:
-            pickle.dump(creds, f)
-    return creds
+
 
 
 def load_listas(creds):
@@ -198,32 +177,10 @@ def load_listas(creds):
 
 def load_sheet_data():
     """Carga los datos de gastos y las listas maestras"""
-    creds = None
-    
-    # 0. Intentar desde variable de entorno (Render)
-    if GOOGLE_CREDENTIALS_JSON:
-        try:
-            creds_info = json.loads(GOOGLE_CREDENTIALS_JSON)
-            creds = service_account.Credentials.from_service_account_info(
-                creds_info, scopes=SCOPES)
-            print("🚀 Usando Service Account desde variable de entorno.")
-        except Exception as e:
-            print(f"⚠️ Error cargando GOOGLE_CREDENTIALS JSON: {e}")
-
-    # 1. Intentar con Service Account si no se cargó del entorno (Ideal para producción/móvil)
-    if not creds and os.path.exists(SERVICE_ACCOUNT_FILE):
-        try:
-            creds = service_account.Credentials.from_service_account_file(
-                SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-            print("🚀 Usando Service Account de archivo local.")
-        except Exception as e:
-            print(f"⚠️ Error cargando Service Account de archivo: {e}")
-
-    # 2. Si no hay Service Account, usar OAuth tradicional
-    if not creds:
-        creds = get_credentials()
-        if not creds or not creds.valid:
-            return None, None, "no_auth"
+    try:
+        creds = get_google_credentials()
+    except Exception as e:
+        return None, None, "no_auth"
         
     try:
         service  = build("sheets", "v4", credentials=creds)
@@ -273,80 +230,7 @@ def load_sheet_data():
 # ──────────────────────────────────────────────
 @server.route("/")
 def index():
-    creds = get_credentials()
-    if creds and creds.valid:
-        return redirect("/dashboard/")
-    return """
-    <html><head><title>Gastos 2026</title>
-    <style>
-        body{background:#0d1117;color:#fff;font-family:Arial,sans-serif;
-             display:flex;flex-direction:column;align-items:center;
-             justify-content:center;height:100vh;margin:0}
-        h1{font-size:2.5rem;margin-bottom:.5rem}
-        p{color:#8b949e;margin-bottom:2rem}
-        a{background:#238636;color:#fff;padding:14px 28px;border-radius:8px;
-          text-decoration:none;font-size:1.1rem;font-weight:bold}
-        a:hover{background:#2ea043}
-    </style></head><body>
-    <h1>💰 Dashboard Gastos Personales</h1>
-    <p>Conectate a tu Google Sheet para visualizar tus datos</p>
-    <a href="/login">🔑 Conectar con Google</a>
-    </body></html>
-    """
-
-
-@server.route("/login")
-def login():
-    if not os.path.exists(CREDENTIALS_FILE):
-        return (
-            "<h2 style='font-family:Arial;color:red'>❌ No se encontró credentials.json</h2>"
-            "<p style='font-family:Arial'>Seguí las instrucciones al inicio del archivo app.py para obtenerlo.</p>"
-        ), 500
-    # Determinar la URL de callback dinámicamente
-    redirect_uri = url_for("oauth_callback", _external=True)
-    
-    flow = Flow.from_client_secrets_file(
-        CREDENTIALS_FILE,
-        scopes=SCOPES,
-        redirect_uri=redirect_uri,
-    )
-    auth_url, state = flow.authorization_url(access_type="offline", prompt="consent")
-    session["oauth_state"] = state
-    session["code_verifier"] = flow.code_verifier
-    return redirect(auth_url)
-
-
-@server.route("/oauth/callback")
-def oauth_callback():
-    try:
-        state = session.get("oauth_state")
-        if not state:
-            return "❌ Error: No se encontró el estado de la sesión (oauth_state). Asegurate de tener las cookies habilitadas.", 400
-            
-        # Determinar la URL de callback dinámicamente
-        redirect_uri = url_for("oauth_callback", _external=True)
-        
-        flow = Flow.from_client_secrets_file(
-            CREDENTIALS_FILE,
-            scopes=SCOPES,
-            redirect_uri=redirect_uri,
-            state=state,
-        )
-        flow.code_verifier = session.get("code_verifier")
-        flow.fetch_token(authorization_response=request.url)
-        creds = flow.credentials
-        with open(TOKEN_FILE, "wb") as f:
-            pickle.dump(creds, f)
-        return redirect("/dashboard/")
-    except Exception as e:
-        return f"❌ Error en el proceso de autenticación: {str(e)}", 500
-
-
-@server.route("/logout")
-def logout():
-    if os.path.exists(TOKEN_FILE):
-        os.remove(TOKEN_FILE)
-    return redirect("/")
+    return redirect("/dashboard/")
 
 
 # ──────────────────────────────────────────────
@@ -401,9 +285,7 @@ app.layout = dbc.Container(
             dbc.Col([
                 dbc.Button("🔄 Actualizar", id="btn-refresh", color="success",
                            outline=True, size="sm", className="me-2"),
-                html.A("⏏ Cerrar sesión", href="/logout",
-                       style={"color": MUTED, "fontSize": ".85rem",
-                              "textDecoration": "none", "lineHeight": "31px"}),
+
             ], width=3, className="text-end d-flex align-items-center justify-content-end"),
         ], className="mb-4 align-items-center"),
 
@@ -558,8 +440,7 @@ def load_data(_, __):
     if status == "no_auth":
         return None, dbc.Alert(
             [html.Strong("⚠️ No autenticado. "),
-             html.A("Hacé click aquí para conectarte a Google", href="/login",
-                    style={"color": "#fff"})],
+             html.Span("Asegurate de tener configurada la variable GOOGLE_CREDENTIALS.")],
             color="warning", dismissable=False,
             style={"borderRadius": "8px", "marginBottom": "16px"},
         )

@@ -16,10 +16,7 @@ import requests
 
 # ── Google Auth / Sheets ──────────────────────────────────────────────────────
 import gspread
-from google.oauth2.credentials import Credentials
-from google.oauth2 import service_account
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
+from src.auth import get_google_credentials
 import json
 
 # ── Telegram ──────────────────────────────────────────────────────────────────
@@ -38,13 +35,6 @@ load_dotenv()
 TELEGRAM_TOKEN   = os.getenv("TELEGRAM_TOKEN")
 SPREADSHEET_ID   = os.getenv("SPREADSHEET_ID", "1R6CujT2y1BY24nTQID9mieOd2Bek_NpFzDVhxC4f2T4")
 GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS")
-SCOPES           = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive",
-]
-CREDENTIALS_FILE = os.path.join(os.path.dirname(__file__), "credentials.json")
-TOKEN_FILE       = os.path.join(os.path.dirname(__file__), "token.json")
-SERVICE_ACCOUNT_FILE = os.path.join(os.path.dirname(__file__), "service_account.json")
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -277,41 +267,7 @@ def clasificar_medio(detalle: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def get_google_client() -> gspread.Client:
-    creds = None
-    
-    # 1. Intentar usar la variable de entorno con el JSON del Service Account (ideal para Render)
-    if GOOGLE_CREDENTIALS_JSON:
-        try:
-            creds_info = json.loads(GOOGLE_CREDENTIALS_JSON)
-            creds = service_account.Credentials.from_service_account_info(creds_info, scopes=SCOPES)
-            logger.info("Autenticado usando Service Account desde variable de entorno.")
-            return gspread.authorize(creds)
-        except Exception as e:
-            logger.error(f"Error parseando GOOGLE_CREDENTIALS JSON: {e}")
-
-    # 2. Intentar usar el archivo service_account.json si existe
-    if os.path.exists(SERVICE_ACCOUNT_FILE):
-        creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-        logger.info("Autenticado usando archivo service_account.json.")
-        return gspread.authorize(creds)
-
-    # 3. Fallback al flujo de Desktop (token.json o credentials.json)
-    if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            logger.info("Token renovado automáticamente.")
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                CREDENTIALS_FILE, SCOPES
-            )
-            # Como es para Render, run_local_server podría fallar sin interfaz gráfica, pero
-            # asumimos que en Render usarás Service Account.
-            creds = flow.run_local_server(port=0, open_browser=True)
-            logger.info("Autorización completada. token.json guardado.")
-        with open(TOKEN_FILE, "w") as f:
-            f.write(creds.to_json())
+    creds = get_google_credentials()
     return gspread.authorize(creds)
 
 
