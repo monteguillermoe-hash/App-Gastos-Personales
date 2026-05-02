@@ -72,6 +72,7 @@ body {
 .card,
 .container,
 .row,
-.col {
+.col,
+[class*="col-"] {
     overflow: visible !important;
 }
