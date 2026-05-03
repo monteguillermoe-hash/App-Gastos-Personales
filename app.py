@@ -232,16 +232,54 @@ def load_sheet_data():
         for col in ("Rubro Principal", "Sub-rubro", "Medio de Pago", "Concepto"):
             df[col] = df[col].astype(str).str.strip()
 
-        df["Fecha"]   = pd.to_datetime(df["Fecha"], dayfirst=True, errors="coerce")
-        df["Importe"] = pd.to_numeric(
-            df["Importe"].astype(str)
-                         .str.replace(",", ".", regex=False)
-                         .str.replace(" ", "", regex=False)
-                         .str.replace("$", "", regex=False),
-            errors="coerce",
-        )
+        # ── Fecha robusta: dd/mm/yyyy, yyyy-mm-dd, y serial numérico de Google Sheets ──
+        def parse_fecha_robusta(val):
+            s = str(val).strip()
+            if not s or s in ("", "nan", "None"):
+                return pd.NaT
+            try:
+                n = float(s)
+                if 40000 < n < 60000:  # rango de seriales de fecha plausible
+                    return pd.Timestamp("1899-12-30") + pd.Timedelta(days=n)
+            except (ValueError, TypeError):
+                pass
+            for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%m/%d/%Y"):
+                try:
+                    return pd.Timestamp(datetime.strptime(s, fmt))
+                except ValueError:
+                    pass
+            return pd.NaT
 
+        df["Fecha"] = df["Fecha"].apply(parse_fecha_robusta)
+
+        # ── Importe robusto: soporta formato argentino 1.234,56 e internacional 1234.56 ──
+        def parse_importe(val):
+            s = str(val).strip().replace("$", "").replace(" ", "").replace("\xa0", "")
+            if not s or s in ("nan", "None", "-", ""):
+                return None
+            tiene_punto = "." in s
+            tiene_coma  = "," in s
+            if tiene_punto and tiene_coma:
+                # Argentino: 1.234,56 → miles=punto, decimal=coma
+                s = s.replace(".", "").replace(",", ".")
+            elif tiene_coma:
+                partes = s.split(",")
+                if len(partes) == 2 and len(partes[1]) == 3 and partes[0].isdigit():
+                    s = s.replace(",", "")  # coma como separador de miles
+                else:
+                    s = s.replace(",", ".")  # coma como decimal
+            try:
+                return float(s)
+            except (ValueError, TypeError):
+                return None
+
+        df["Importe"] = pd.to_numeric(df["Importe"].apply(parse_importe), errors="coerce")
+
+        antes = len(df)
         df = df.dropna(subset=["Fecha", "Importe"])
+        descartadas = antes - len(df)
+        if descartadas:
+            print(f"⚠️  Se descartaron {descartadas} filas por Fecha o Importe inválidos.")
 
         if df.empty:
             return pd.DataFrame(), {}, "empty"
@@ -580,8 +618,8 @@ def populate_filters(data):
         listas = store.get("listas", {})
 
         if not df.empty:
-            # Las fechas vienen en ISO desde el dcc.Store (JSON), no en dd/mm/yyyy
-            df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
+            # Conversión explícita con formato día/mes/año
+            df["Fecha"] = pd.to_datetime(df["Fecha"], format="%d/%m/%Y", errors="coerce")
 
         # Prioridad: Listas maestras > valores únicos del DataFrame
         rubros = listas.get("rubros") or sorted(
@@ -638,8 +676,8 @@ def update_dashboard(data, start_date, end_date, rubro, subrubro, medio):
         store = json.loads(data)
         df = pd.read_json(io.StringIO(store["df"]), orient="split")
 
-        # Las fechas vienen en ISO desde el dcc.Store (JSON), no en dd/mm/yyyy
-        df["Fecha_dt"] = pd.to_datetime(df["Fecha"], errors="coerce")
+        # Conversión explícita de fechas desde el sheet
+        df["Fecha_dt"] = pd.to_datetime(df["Fecha"], format="%d/%m/%Y", errors="coerce")
 
         # Aplicar filtros de fechas
         if start_date and end_date:
@@ -647,13 +685,13 @@ def update_dashboard(data, start_date, end_date, rubro, subrubro, medio):
             ff = datetime.strptime(end_date, "%Y-%m-%d")
             df = df[(df["Fecha_dt"].dt.date >= fi.date()) & (df["Fecha_dt"].dt.date <= ff.date())]
 
-        # Aplicar filtros de rubro/subrubro/medio (multi=True → valor es lista)
+        # Aplicar filtros de rubro/subrubro/medio
         if rubro:
-            df = df[df["Rubro Principal"].isin(rubro)]
+            df = df[df["Rubro Principal"] == rubro]
         if subrubro:
-            df = df[df["Sub-rubro"].isin(subrubro)]
+            df = df[df["Sub-rubro"] == subrubro]
         if medio:
-            df = df[df["Medio de Pago"].isin(medio)]
+            df = df[df["Medio de Pago"] == medio]
 
         # Si después de filtrar no hay datos
         if df.empty:
