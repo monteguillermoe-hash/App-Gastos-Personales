@@ -412,6 +412,7 @@ app.layout = dbc.Container(
             },
         ),
 
+
         # ── KPI Cards ──
         dbc.Row(id="kpi-row", className="mb-4 g-3"),
 
@@ -600,7 +601,6 @@ def populate_filters(data):
         print("🔥 Error en populate_filters:")
         traceback.print_exc()
         return [], [], [], None, None, None, None
-
 # 3. Actualizar dashboard
 @app.callback(
     Output("kpi-row",         "children"),
@@ -646,14 +646,14 @@ def update_dashboard(data, start_date, end_date, rubro, subrubro, medio):
         if df.empty:
             return [], go.Figure(), go.Figure(), go.Figure(), go.Figure(), [], "0 registros"
 
-# ── Cálculos KPI ──
-total       = df["Importe"].sum()
-n_registros = len(df)
-promedio    = df["Importe"].mean()
-top_rubro   = (df.groupby("Rubro Principal")["Importe"].sum()
-                 .reset_index()
-                 .sort_values("Importe", ascending=False)
-                 .iloc[0]["Rubro Principal"])
+        # ── Cálculos KPI ──
+        total       = df["Importe"].sum()
+        n_registros = len(df)
+        promedio    = df["Importe"].mean()
+        top_rubro   = (df.groupby("Rubro Principal")["Importe"].sum()
+                         .reset_index()
+                         .sort_values("Importe", ascending=False)
+                         .iloc[0]["Rubro Principal"])
 
         # ── KPI cards ──
         kpis = dbc.Row([
@@ -679,18 +679,15 @@ top_rubro   = (df.groupby("Rubro Principal")["Importe"].sum()
         # ── Gráfico Medio de pago ──
         medio_df = (df.groupby("Medio de Pago")["Importe"].sum()
               .reset_index().sort_values("Importe", ascending=True))
-fig_medio = px.pie(
-    medio_df, names="Medio de Pago", values="Importe",
-    color="Medio de Pago", color_discrete_sequence=PALETTE,
-    hole=0.4
-)
-fig_medio.update_layout(**PLOTLY_LAYOUT)
-
-# Crear columna Mes desde Fecha_dt
-df["Mes"] = df["Fecha_dt"].dt.to_period("M").dt.to_timestamp()
+        fig_medio = px.pie(
+            medio_df, names="Medio de Pago", values="Importe",
+            color="Medio de Pago", color_discrete_sequence=PALETTE,
+            hole=0.4
+        )
+        fig_medio.update_layout(**PLOTLY_LAYOUT)
 
         # ── Evolución mensual ──
-
+        df["Mes"] = df["Fecha_dt"].dt.to_period("M").dt.to_timestamp()
         evol_df  = (df.groupby(["Mes", "Rubro Principal"])["Importe"].sum()
                       .reset_index().sort_values("Mes"))
         fig_evol = px.line(
@@ -704,34 +701,33 @@ df["Mes"] = df["Fecha_dt"].dt.to_period("M").dt.to_timestamp()
             yaxis=dict(showgrid=True, gridcolor="#30363d", tickformat="$,.0f"),
         )
 
-# ── Top 8 Sub-rubros ──
-sub_df = (df.groupby("Sub-rubro")["Importe"].sum()
-            .nlargest(8).reset_index()
-            .sort_values("Importe", ascending=True))
-
-fig_sub = px.bar(
-    sub_df, x="Importe", y="Sub-rubro", orientation="h",
-    color="Sub-rubro", color_discrete_sequence=PALETTE,
-    text=sub_df["Importe"].apply(lambda x: f"$ {x:,.0f}")
-)
-fig_sub.update_traces(textposition="outside", textfont_size=11)
-fig_sub.update_layout(**PLOTLY_LAYOUT, showlegend=False,
-                      xaxis=dict(showgrid=True, gridcolor="#30363d", tickformat="$,.0f"),
-                      yaxis=dict(showgrid=False))
+        # ── Top 8 Sub-rubros ──
+        sub_df  = (df.groupby("Sub-rubro")["Importe"].sum()
+                     .nlargest(8).reset_index().sort_values("Importe", ascending=True))
+        fig_sub = px.bar(
+            sub_df, x="Importe", y="Sub-rubro", orientation="h",
+            color="Sub-rubro", color_discrete_sequence=PALETTE,
+            text=sub_df["Importe"].apply(lambda x: f"$ {x:,.0f}")
+        )
+        fig_sub.update_traces(textposition="outside", textfont_size=11)
+        fig_sub.update_layout(**PLOTLY_LAYOUT, showlegend=False,
+                               xaxis=dict(showgrid=True, gridcolor="#30363d",
+                                          tickformat="$,.0f"),
+                               yaxis=dict(showgrid=False))
 
         # ── Tabla ──
-df["Fecha_str"] = df["Fecha_dt"].dt.strftime("%d/%m/%Y")
-df["Importe_fmt"] = df["Importe"].apply(lambda x: f"$ {x:,.2f}")
+        df["Fecha_str"] = df["Fecha_dt"].dt.strftime("%d/%m/%Y")
+        df["Importe_fmt"] = df["Importe"].apply(lambda x: f"$ {x:,.2f}")
 
-table_cols = ["Fecha_str", "Concepto", "Importe_fmt",
-              "Rubro Principal", "Sub-rubro", "Medio de Pago"]
+        table_cols = ["Fecha_str", "Concepto", "Importe_fmt",
+                      "Rubro Principal", "Sub-rubro", "Medio de Pago"]
 
-table_data = (df[table_cols + ["Fecha"]]
-                .sort_values("Fecha", ascending=False)
-                .drop(columns=["Fecha"])
-                .to_dict("records"))
+        table_data = (df[table_cols + ["Fecha"]]
+                        .sort_values("Fecha", ascending=False)
+                        .drop(columns=["Fecha"])
+                        .to_dict("records"))
 
-count_label = f"{n_registros} registros · Total: $ {total:,.0f}"
+        count_label = f"{n_registros} registros · Total: $ {total:,.0f}"
 
         return kpis, fig_rubro, fig_medio, fig_evol, fig_sub, table_data, count_label
 
