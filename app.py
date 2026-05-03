@@ -61,35 +61,73 @@ app = Dash(
     suppress_callback_exceptions=True,
     title="💰 Gastos 2026",
     meta_tags=[
+        # Único meta gestionado por Dash; PWA y theme-color van en index_string
         {"name": "viewport",
          "content": "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"},
-        {"name": "apple-mobile-web-app-capable", "content": "yes"},
-        {"name": "theme-color",                  "content": "#0d1117"},
     ],
 )
 
 # ──────────────────────────────────────────────
-# PWA Routes
+# PWA Routes  (archivos en la raíz del proyecto)
 # ──────────────────────────────────────────────
 @server.route("/manifest.json")
 def serve_manifest():
-    return send_from_directory("assets", "manifest.json")
+    # Render sirve archivos estáticos desde la raíz del repo
+    resp = send_from_directory(".", "manifest.json")
+    resp.headers["Content-Type"]  = "application/manifest+json"
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
 
-@server.route("/sw.js")
+@server.route("/service-worker.js")
 def serve_sw():
-    return send_from_directory("assets", "sw.js")
+    resp = send_from_directory(".", "service-worker.js")
+    resp.headers["Content-Type"]       = "application/javascript"
+    resp.headers["Cache-Control"]      = "no-cache, no-store, must-revalidate"
+    resp.headers["Service-Worker-Allowed"] = "/"
+    return resp
 
 
 app.index_string = """
 <!DOCTYPE html>
-<html>
+<html lang="es">
     <head>
         {%metas%}
         <title>{%title%}</title>
         {%favicon%}
         {%css%}
+
+        <!-- ═══ PWA ════════════════════════════════════════════════ -->
         <link rel="manifest" href="/manifest.json">
-        <link rel="apple-touch-icon" href="/assets/icon-192.png">
+        <meta name="theme-color" content="#00ff99">
+
+        <!-- Iconos -->
+        <link rel="icon"             type="image/png" sizes="192x192" href="/assets/icon-192.png">
+        <link rel="icon"             type="image/png" sizes="512x512" href="/assets/icon-512.png">
+        <link rel="apple-touch-icon"                                  href="/assets/icon-192.png">
+
+        <!-- iOS standalone -->
+        <meta name="apple-mobile-web-app-capable"          content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title"            content="Gastos">
+        <!-- ════════════════════════════════════════════════════════ -->
+
+        <style>
+            /* Ajustes globales mobile-first */
+            @media (max-width: 576px) {
+                /* Reducir padding del contenedor principal en celular */
+                .container-fluid { padding-left: 10px !important; padding-right: 10px !important; }
+                /* Títulos más compactos */
+                h2 { font-size: 1.25rem !important; }
+                /* Gráficos: altura fija para no ocupar toda la pantalla */
+                .js-plotly-plot { min-height: 260px; }
+                /* Tabla: fuente y celdas más chicas */
+                .dash-table-container .dash-spreadsheet-container .dash-spreadsheet td,
+                .dash-table-container .dash-spreadsheet-container .dash-spreadsheet th {
+                    font-size: 0.78rem !important;
+                    padding: 5px 7px !important;
+                }
+            }
+        </style>
     </head>
     <body>
         {%app_entry%}
@@ -101,9 +139,25 @@ app.index_string = """
         <script>
             if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function () {
-                    navigator.serviceWorker.register('/sw.js')
-                        .then(r  => console.log('SW registrado:', r.scope))
-                        .catch(e => console.log('SW error:', e));
+                    navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
+                        .then(function(reg) {
+                            console.log('[PWA] SW registrado. Scope:', reg.scope);
+                            // Forzar activación si hay nueva versión esperando
+                            if (reg.waiting) {
+                                reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                            }
+                            reg.addEventListener('updatefound', function () {
+                                var newSW = reg.installing;
+                                newSW.addEventListener('statechange', function () {
+                                    if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+                                        console.log('[PWA] Nueva version disponible.');
+                                    }
+                                });
+                            });
+                        })
+                        .catch(function(e) {
+                            console.error('[PWA] Error al registrar SW:', e);
+                        });
                 });
             }
         </script>
@@ -234,15 +288,6 @@ def load_sheet_data():
 
         for col in ("Rubro Principal", "Sub-rubro", "Medio de Pago", "Concepto"):
             df[col] = df[col].astype(str).str.strip()
-
-        # UNFORMATTED_VALUE puede devolver el indice numerico del dropdown en lugar del
-        # texto (ej: "1", "2"). Se detectan y se normalizan a "" para que no lleguen al grafico.
-        for col in ("Rubro Principal", "Sub-rubro", "Medio de Pago"):
-            mask_num = df[col].str.match(r"^\d+(\.\d+)?$", na=False)
-            if mask_num.any():
-                print(f"   ⚠️  '{col}': {mask_num.sum()} valor(es) numerico(s) descartados "
-                      f"→ {df.loc[mask_num, col].unique().tolist()}")
-            df.loc[mask_num, col] = ""
 
         # ── FECHA: UNFORMATTED_VALUE devuelve serial numérico (ej: 46054 = 01/02/2026)
         # Epoch de Google Sheets = 1899-12-30
@@ -441,18 +486,22 @@ PLOTLY_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
     font=dict(color=TEXT, family="Arial"),
-    margin=dict(t=40, b=20, l=20, r=20),
-    legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color=TEXT)),
+    margin=dict(t=32, b=16, l=8, r=8),   # más compacto → mejor en mobile
+    legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color=TEXT, size=11)),
+    autosize=True,
 )
 
 
 def stat_card(title, value, icon, color=ACCENT):
     return dbc.Card(
         dbc.CardBody([
-            html.Div(icon, style={"fontSize": "2rem", "marginBottom": "4px"}),
-            html.P(title, style={"color": MUTED, "margin": "0", "fontSize": ".85rem"}),
-            html.H4(value, style={"color": color, "margin": "0", "fontWeight": "bold"}),
-        ]),
+            html.Div(icon, style={"fontSize": "1.7rem", "marginBottom": "2px"}),
+            html.P(title, style={"color": MUTED, "margin": "0",
+                                 "fontSize": "clamp(.72rem, 2vw, .85rem)"}),
+            html.H4(value, style={"color": color, "margin": "0", "fontWeight": "bold",
+                                  "fontSize": "clamp(.95rem, 3vw, 1.3rem)",
+                                  "wordBreak": "break-word"}),
+        ], style={"padding": "10px 8px"}),
         style={
             "background": BG_CARD,
             "border": f"1px solid {color}22",
@@ -484,7 +533,8 @@ FILTER_CARD_BODY_STYLE = {
 
 app.layout = dbc.Container(
     fluid=True,
-    style={"background": BG_DARK, "minHeight": "100vh", "padding": "20px"},
+    # En mobile el <style> del index_string reduce el padding a 10px
+    style={"background": BG_DARK, "minHeight": "100vh", "padding": "16px"},
     children=[
         dcc.Store(id="store-data"),
         dcc.Interval(id="load-trigger", interval=500, max_intervals=1),
@@ -493,15 +543,21 @@ app.layout = dbc.Container(
         dbc.Row([
             dbc.Col([
                 html.H2("💰 Gastos Personales 2026",
-                        style={"color": ACCENT, "margin": "0", "fontWeight": "bold"}),
-                html.P("Dashboard financiero personal · Google Sheets",
-                       style={"color": MUTED, "margin": "0", "fontSize": ".9rem"}),
-            ], width=9),
+                        style={"color": ACCENT, "margin": "0", "fontWeight": "bold",
+                               "fontSize": "clamp(1.1rem, 4vw, 1.6rem)"}),
+                html.P("Dashboard financiero · Google Sheets",
+                       style={"color": MUTED, "margin": "0", "fontSize": ".82rem"}),
+            ], xs=8, md=9),
             dbc.Col([
-                dbc.Button("🔄 Actualizar", id="btn-refresh", color="success",
-                           outline=True, size="sm", className="me-2"),
-            ], width=3, className="text-end d-flex align-items-center justify-content-end"),
-        ], className="mb-4 align-items-center"),
+                dbc.Button("🔄", id="btn-refresh", color="success",
+                           outline=True, size="sm",
+                           title="Actualizar datos",
+                           className="d-md-none me-1"),          # solo icono en mobile
+                dbc.Button("🔄 Actualizar", id="btn-refresh-md", color="success",
+                           outline=True, size="sm",
+                           className="d-none d-md-inline-block"), # texto en desktop
+            ], xs=4, md=3, className="text-end d-flex align-items-center justify-content-end"),
+        ], className="mb-3 align-items-center"),
 
         # ── Estado ──
         html.Div(id="alert-status"),
@@ -607,20 +663,22 @@ app.layout = dbc.Container(
                                    style={"background": BG_CARD, "color": TEXT,
                                           "borderBottom": "1px solid #30363d"}),
                     dbc.CardBody(dcc.Graph(id="chart-evolucion",
-                                          config={"displayModeBar": False})),
+                                          config={"displayModeBar": False},
+                                          style={"minHeight": "280px"})),
                 ], style={"background": BG_CARD, "border": "1px solid #30363d",
                           "borderRadius": "12px"}),
-            ], xs=12, lg=8),
+            ], xs=12, md=6, lg=8),
             dbc.Col([
                 dbc.Card([
                     dbc.CardHeader("🏷️ Top 8 Sub-rubros",
                                    style={"background": BG_CARD, "color": TEXT,
                                           "borderBottom": "1px solid #30363d"}),
                     dbc.CardBody(dcc.Graph(id="chart-subrubro",
-                                          config={"displayModeBar": False})),
+                                          config={"displayModeBar": False},
+                                          style={"minHeight": "280px"})),
                 ], style={"background": BG_CARD, "border": "1px solid #30363d",
                           "borderRadius": "12px"}),
-            ], xs=12, lg=4),
+            ], xs=12, md=6, lg=4),
         ], className="mb-4 g-3"),
 
         # ── Tabla ──
@@ -686,11 +744,12 @@ app.layout = dbc.Container(
 @app.callback(
     Output("store-data",   "data"),
     Output("alert-status", "children"),
-    Input("load-trigger",  "n_intervals"),
-    Input("btn-refresh",   "n_clicks"),
+    Input("load-trigger",    "n_intervals"),
+    Input("btn-refresh",     "n_clicks"),   # botón mobile (solo icono)
+    Input("btn-refresh-md",  "n_clicks"),   # botón desktop (con texto)
     prevent_initial_call=False,
 )
-def load_data(_, __):
+def load_data(_, __, ___):
     df, listas, status = load_sheet_data()
 
     if status == "no_auth":
@@ -857,20 +916,8 @@ def update_dashboard(data, start_date, end_date, rubro, subrubro, medio):
                                  yaxis=dict(showgrid=False))
 
         # ── Gráfico Medio de pago ──
-        # Filtrar solo valores presentes en las listas maestras (evita artefactos
-        # como "1" que llegan de indices numericos de dropdowns en Google Sheets)
-        medios_validos = store.get("listas", {}).get("medios", [])
-        medio_df = df.copy()
-        if medios_validos:
-            medio_df = medio_df[medio_df["Medio de Pago"].isin(medios_validos)]
-        else:
-            # Si no hay listas, al menos excluir cadenas puramente numericas y vacias
-            medio_df = medio_df[
-                medio_df["Medio de Pago"].str.strip().str.len() > 0
-                & ~medio_df["Medio de Pago"].str.match(r"^\d+(\.\d+)?$", na=False)
-            ]
-        medio_df = (medio_df.groupby("Medio de Pago")["Importe"].sum()
-                            .reset_index().sort_values("Importe", ascending=True))
+        medio_df = (df.groupby("Medio de Pago")["Importe"].sum()
+              .reset_index().sort_values("Importe", ascending=True))
         fig_medio = px.pie(
             medio_df, names="Medio de Pago", values="Importe",
             color="Medio de Pago", color_discrete_sequence=PALETTE,
