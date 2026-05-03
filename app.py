@@ -187,9 +187,12 @@ def load_sheet_data():
     try:
         service = build("sheets", "v4", credentials=creds)
 
-        # 1. Hoja de Gastos
+        # 1. Hoja de Gastos — UNFORMATTED_VALUE: fechas como serial, números como float
         res_gastos = (service.spreadsheets().values()
-                             .get(spreadsheetId=SHEET_ID, range="Gastos Personales 2026!A:Z")
+                             .get(spreadsheetId=SHEET_ID,
+                                  range="Gastos Personales 2026!A:Z",
+                                  valueRenderOption="UNFORMATTED_VALUE",
+                                  dateTimeRenderOption="SERIAL_NUMBER")
                              .execute())
 
         values_g = res_gastos.get("values", [])
@@ -232,30 +235,50 @@ def load_sheet_data():
         for col in ("Rubro Principal", "Sub-rubro", "Medio de Pago", "Concepto"):
             df[col] = df[col].astype(str).str.strip()
 
-        # ── LOG: primeras filas crudas para diagnóstico ──
-        print("\n🔍 DATOS CRUDOS (primeras 5 filas):")
-        print(f"   Fechas  : {df['Fecha'].head(5).tolist()}")
-        print(f"   Importes: {df['Importe'].head(5).tolist()}")
+        # ── FECHA: UNFORMATTED_VALUE devuelve serial numérico (ej: 46054 = 01/02/2026)
+        # Epoch de Google Sheets = 1899-12-30
+        # 100% libre de ambigüedad de locale: 46054 siempre es 2026-02-01
+        SHEETS_EPOCH = pd.Timestamp("1899-12-30")
 
-        # ── IMPORTE: detecta separador por posición del ÚLTIMO separador ──
-        # Regla: el ÚLTIMO sep (. o ,) es el decimal
-        #   6,666.67  → punto más a la derecha → decimal=punto  → 6666.67
-        #   6.666,67  → coma  más a la derecha → decimal=coma   → 6666.67
-        #   6666,67   → solo coma              → decimal=coma   → 6666.67
+        def serial_to_fecha(val):
+            # Caso principal: número serial (UNFORMATTED_VALUE)
+            if isinstance(val, (int, float)):
+                n = float(val)
+                if 40000 < n < 60000:
+                    return SHEETS_EPOCH + pd.Timedelta(days=int(n))
+                return pd.NaT
+            # Fallback texto (por si alguna celda tiene fórmula que devuelve texto)
+            s = str(val).strip()
+            if not s or s in ("","nan","None"):
+                return pd.NaT
+            try:
+                n = float(s)
+                if 40000 < n < 60000:
+                    return SHEETS_EPOCH + pd.Timedelta(days=int(n))
+            except (ValueError, TypeError):
+                pass
+            for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d/%m/%y", "%d-%m-%Y"):
+                try:
+                    return pd.Timestamp(datetime.strptime(s, fmt))
+                except ValueError:
+                    pass
+            return pd.NaT
+
+        df["Fecha"] = df["Fecha"].apply(serial_to_fecha)
+
+        # ── IMPORTE: UNFORMATTED_VALUE ya devuelve float directamente
         def parse_importe(val):
+            if isinstance(val, (int, float)):
+                return float(val)
+            # Fallback texto
             s = str(val).strip().replace("$","").replace(" ","").replace("\xa0","")
             if not s or s in ("nan","None","-",""):
                 return None
-            dp = s.rfind(".")
-            dc = s.rfind(",")
+            dp, dc = s.rfind("."), s.rfind(",")
             if dp > 0 and dc > 0:
-                if dp > dc:          # US: 6,666.67
-                    s = s.replace(",","")
-                else:                # AR: 6.666,67
-                    s = s.replace(".","").replace(",",".")
-            elif dc > 0:             # solo coma: 6666,67 → 6666.67
+                s = s.replace(",","") if dp > dc else s.replace(".","").replace(",",".")
+            elif dc > 0:
                 s = s.replace(",",".")
-            # solo punto o sin separador → ya es float válido
             try:
                 return float(s)
             except (ValueError, TypeError):
@@ -263,34 +286,10 @@ def load_sheet_data():
 
         df["Importe"] = pd.to_numeric(df["Importe"].apply(parse_importe), errors="coerce")
 
-        # ── FECHA: dayfirst=True, soporta dd/mm/yyyy, yyyy-mm-dd y serial Sheets ──
-        def parse_fecha(val):
-            s = str(val).strip()
-            if not s or s in ("","nan","None"):
-                return pd.NaT
-            # Serial numérico de Google Sheets (ej: 46200.0)
-            try:
-                n = float(s)
-                if 40000 < n < 60000:
-                    return pd.Timestamp("1899-12-30") + pd.Timedelta(days=n)
-            except (ValueError, TypeError):
-                pass
-            for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y"):
-                try:
-                    return pd.Timestamp(datetime.strptime(s, fmt))
-                except ValueError:
-                    pass
-            # Último recurso: dayfirst
-            return pd.to_datetime(s, dayfirst=True, errors="coerce")
-
-        df["Fecha"] = df["Fecha"].apply(parse_fecha)
-
         antes = len(df)
-        df = df.dropna(subset=["Fecha", "Importe"])
-        print(f"📊 Filas válidas: {len(df)} de {antes} totales")
-        print(f"   Fechas parseadas (primeras 5): {df['Fecha'].head(5).tolist()}")
-        print(f"   Importes parseados (primeros 5): {df['Importe'].head(5).tolist()}")
-        print(f"   Rango de fechas: {df['Fecha'].min()} → {df['Fecha'].max()}")
+        df = df.dropna(subset=["Fecha","Importe"])
+        print(f"📊 Cargados: {len(df)} registros de {antes} filas")
+        print(f"   Rango: {df['Fecha'].min().date()} → {df['Fecha'].max().date()}")
 
         if df.empty:
             return pd.DataFrame(), {}, "empty"
