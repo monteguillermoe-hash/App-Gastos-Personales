@@ -638,15 +638,14 @@ def update_dashboard(data, start_date, end_date, rubro, subrubro, medio):
         store = json.loads(data)
         df = pd.read_json(io.StringIO(store["df"]), orient="split")
 
-        # Conversión explícita de fechas
-        df["Fecha_dt"] = df["Fecha"].apply(parse_fecha)
+        # Conversión explícita de fechas desde el sheet
+        df["Fecha_dt"] = pd.to_datetime(df["Fecha"], format="%d/%m/%Y", errors="coerce")
 
         # Aplicar filtros de fechas
         if start_date and end_date:
-            # DatePickerRange entrega ISO: "2026-01-02"
             fi = datetime.strptime(start_date, "%Y-%m-%d")
             ff = datetime.strptime(end_date, "%Y-%m-%d")
-            df = df[(df["Fecha_dt"] >= fi) & (df["Fecha_dt"] <= ff)]
+            df = df[(df["Fecha_dt"].dt.date >= fi.date()) & (df["Fecha_dt"].dt.date <= ff.date())]
 
         # Aplicar filtros de rubro/subrubro/medio
         if rubro:
