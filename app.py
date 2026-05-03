@@ -583,13 +583,25 @@ def populate_filters(data):
             # Conversión explícita con formato día/mes/año
             df["Fecha"] = pd.to_datetime(df["Fecha"], format="%d/%m/%Y", errors="coerce")
 
-        rubros    = listas.get("rubros")    or sorted(df["Rubro Principal"].dropna().unique().tolist())
-        subrubros = listas.get("subrubros") or sorted(df["Sub-rubro"].dropna().unique().tolist())
-        medios    = listas.get("medios")    or sorted(df["Medio de Pago"].dropna().unique().tolist())
+        # Prioridad: Listas maestras > valores únicos del DataFrame
+        rubros = listas.get("rubros") or sorted(
+            df["Rubro Principal"].dropna().apply(lambda x: str(x).strip()).unique().tolist()
+        )
+        subrubros = listas.get("subrubros") or sorted(
+            df["Sub-rubro"].dropna().apply(lambda x: str(x).strip()).unique().tolist()
+        )
+        medios = listas.get("medios") or sorted(
+            df["Medio de Pago"].dropna().apply(lambda x: str(x).strip()).unique().tolist()
+        )
 
+        # Filtrar cadenas vacías
         rubros    = [v for v in rubros    if v and str(v).strip()]
         subrubros = [v for v in subrubros if v and str(v).strip()]
         medios    = [v for v in medios    if v and str(v).strip()]
+
+        # Forzar inclusión de “Gasto Corriente”
+        if "Gasto Corriente" not in rubros:
+            rubros.append("Gasto Corriente")
 
         mk  = lambda lst: [{"label": v, "value": v} for v in lst]
         mn  = df["Fecha"].min().date() if not df.empty else None
@@ -601,6 +613,7 @@ def populate_filters(data):
         print("🔥 Error en populate_filters:")
         traceback.print_exc()
         return [], [], [], None, None, None, None
+
 # 3. Actualizar dashboard
 @app.callback(
     Output("kpi-row",         "children"),
@@ -630,8 +643,9 @@ def update_dashboard(data, start_date, end_date, rubro, subrubro, medio):
 
         # Aplicar filtros de fechas
         if start_date and end_date:
-            fi = parse_fecha(start_date)
-            ff = parse_fecha(end_date)
+            # DatePickerRange entrega ISO: "2026-01-02"
+            fi = datetime.strptime(start_date, "%Y-%m-%d")
+            ff = datetime.strptime(end_date, "%Y-%m-%d")
             df = df[(df["Fecha_dt"] >= fi) & (df["Fecha_dt"] <= ff)]
 
         # Aplicar filtros de rubro/subrubro/medio
