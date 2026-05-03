@@ -61,9 +61,10 @@ app = Dash(
     suppress_callback_exceptions=True,
     title="💰 Gastos 2026",
     meta_tags=[
-        # viewport: único meta que se gestiona desde acá; el resto va en index_string
         {"name": "viewport",
          "content": "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"},
+        {"name": "apple-mobile-web-app-capable", "content": "yes"},
+        {"name": "theme-color",                  "content": "#0d1117"},
     ],
 )
 
@@ -74,15 +75,9 @@ app = Dash(
 def serve_manifest():
     return send_from_directory("assets", "manifest.json")
 
-@server.route("/service-worker.js")
+@server.route("/sw.js")
 def serve_sw():
-    # Content-Type correcto + sin cache para que el browser siempre
-    # reciba la versión más nueva del SW
-    response = send_from_directory("assets", "sw.js")
-    response.headers["Content-Type"]  = "application/javascript"
-    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    response.headers["Service-Worker-Allowed"] = "/"
-    return response
+    return send_from_directory("assets", "sw.js")
 
 
 app.index_string = """
@@ -93,24 +88,8 @@ app.index_string = """
         <title>{%title%}</title>
         {%favicon%}
         {%css%}
-
-        <!-- ═══ PWA ═══════════════════════════════════════════════ -->
         <link rel="manifest" href="/manifest.json">
-
-        <!-- Iconos estandar (Chrome, Edge, Firefox) -->
-        <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
-        <link rel="icon" type="image/png" sizes="512x512" href="/assets/icon-512.png">
-
-        <!-- iOS: icono en pantalla de inicio + modo standalone -->
-        <link rel="apple-touch-icon"             href="/assets/icon-192.png">
-        <meta name="apple-mobile-web-app-capable"          content="yes">
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-        <meta name="apple-mobile-web-app-title"            content="Gastos">
-
-        <!-- Color de barra de sistema en Android Chrome -->
-        <meta name="theme-color" content="#00ff99">
-        <!-- ════════════════════════════════════════════════════════ -->
-
+        <link rel="apple-touch-icon" href="/assets/icon-192.png">
     </head>
     <body>
         {%app_entry%}
@@ -122,20 +101,9 @@ app.index_string = """
         <script>
             if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function () {
-                    navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
-                        .then(function(reg) {
-                            console.log('[PWA] SW registrado. Scope:', reg.scope);
-                            if (reg.waiting) { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); }
-                            reg.addEventListener('updatefound', function () {
-                                var newSW = reg.installing;
-                                newSW.addEventListener('statechange', function () {
-                                    if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-                                        console.log('[PWA] Nueva version disponible.');
-                                    }
-                                });
-                            });
-                        })
-                        .catch(function(e) { console.error('[PWA] Error al registrar SW:', e); });
+                    navigator.serviceWorker.register('/sw.js')
+                        .then(r  => console.log('SW registrado:', r.scope))
+                        .catch(e => console.log('SW error:', e));
                 });
             }
         </script>
@@ -266,6 +234,15 @@ def load_sheet_data():
 
         for col in ("Rubro Principal", "Sub-rubro", "Medio de Pago", "Concepto"):
             df[col] = df[col].astype(str).str.strip()
+
+        # UNFORMATTED_VALUE puede devolver el indice numerico del dropdown en lugar del
+        # texto (ej: "1", "2"). Se detectan y se normalizan a "" para que no lleguen al grafico.
+        for col in ("Rubro Principal", "Sub-rubro", "Medio de Pago"):
+            mask_num = df[col].str.match(r"^\d+(\.\d+)?$", na=False)
+            if mask_num.any():
+                print(f"   ⚠️  '{col}': {mask_num.sum()} valor(es) numerico(s) descartados "
+                      f"→ {df.loc[mask_num, col].unique().tolist()}")
+            df.loc[mask_num, col] = ""
 
         # ── FECHA: UNFORMATTED_VALUE devuelve serial numérico (ej: 46054 = 01/02/2026)
         # Epoch de Google Sheets = 1899-12-30
@@ -880,8 +857,20 @@ def update_dashboard(data, start_date, end_date, rubro, subrubro, medio):
                                  yaxis=dict(showgrid=False))
 
         # ── Gráfico Medio de pago ──
-        medio_df = (df.groupby("Medio de Pago")["Importe"].sum()
-              .reset_index().sort_values("Importe", ascending=True))
+        # Filtrar solo valores presentes en las listas maestras (evita artefactos
+        # como "1" que llegan de indices numericos de dropdowns en Google Sheets)
+        medios_validos = store.get("listas", {}).get("medios", [])
+        medio_df = df.copy()
+        if medios_validos:
+            medio_df = medio_df[medio_df["Medio de Pago"].isin(medios_validos)]
+        else:
+            # Si no hay listas, al menos excluir cadenas puramente numericas y vacias
+            medio_df = medio_df[
+                medio_df["Medio de Pago"].str.strip().str.len() > 0
+                & ~medio_df["Medio de Pago"].str.match(r"^\d+(\.\d+)?$", na=False)
+            ]
+        medio_df = (medio_df.groupby("Medio de Pago")["Importe"].sum()
+                            .reset_index().sort_values("Importe", ascending=True))
         fig_medio = px.pie(
             medio_df, names="Medio de Pago", values="Importe",
             color="Medio de Pago", color_discrete_sequence=PALETTE,
