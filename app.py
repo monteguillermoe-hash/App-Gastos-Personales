@@ -409,7 +409,7 @@ def debug_data():
         <tbody>{table_html}</tbody>
         </table>
         </body></html>
-        """, 200, {{"Content-Type": "text/html"}}
+        """, 200, {"Content-Type": "text/html"}
 
     except Exception as e:
         import traceback
