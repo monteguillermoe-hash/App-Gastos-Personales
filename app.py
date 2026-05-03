@@ -26,6 +26,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
+def parse_fecha(fecha_str):
+    return datetime.strptime(fecha_str, "%d/%m/%Y")
 from flask import Flask, redirect, request, send_from_directory
 from dash import Dash, dcc, html, dash_table, Input, Output
 import dash_bootstrap_components as dbc
@@ -577,17 +579,13 @@ def populate_filters(data):
         listas = store.get("listas", {})
 
         if not df.empty:
-            # FIX: mismo tratamiento tz-naive para calcular min/max correctamente
-            df["Fecha"] = (pd.to_datetime(df["Fecha"], utc=True)
-                             .dt.tz_convert(None)
-                             .dt.normalize())
+            # Conversión explícita con formato día/mes/año
+            df["Fecha"] = pd.to_datetime(df["Fecha"], format="%d/%m/%Y", errors="coerce")
 
-        # Prioridad: Listas maestras > valores únicos del DataFrame
         rubros    = listas.get("rubros")    or sorted(df["Rubro Principal"].dropna().unique().tolist())
         subrubros = listas.get("subrubros") or sorted(df["Sub-rubro"].dropna().unique().tolist())
         medios    = listas.get("medios")    or sorted(df["Medio de Pago"].dropna().unique().tolist())
 
-        # Filtrar cadenas vacías que pudieran colarse
         rubros    = [v for v in rubros    if v and str(v).strip()]
         subrubros = [v for v in subrubros if v and str(v).strip()]
         medios    = [v for v in medios    if v and str(v).strip()]
@@ -602,7 +600,6 @@ def populate_filters(data):
         print("🔥 Error en populate_filters:")
         traceback.print_exc()
         return [], [], [], None, None, None, None
-
 
 # 3. Actualizar dashboard
 @app.callback(
@@ -620,69 +617,43 @@ def populate_filters(data):
     Input("filter-subrubro",  "value"),
     Input("filter-medio",     "value"),
 )
-def update_dashboard(data, start_date, end_date, rubros, subrubros, medios):
-    empty_fig = go.Figure(layout={
-        **PLOTLY_LAYOUT,
-        "annotations": [{"text": "Sin datos", "showarrow": False,
-                          "font": {"color": MUTED, "size": 16}}],
-    })
-
-    if not data:
-        return [], empty_fig, empty_fig, empty_fig, empty_fig, [], "Sin datos"
-
+def update_dashboard(data, start_date, end_date, rubro, subrubro, medio):
     try:
+        if not data:
+            return [], go.Figure(), go.Figure(), go.Figure(), go.Figure(), [], "0 registros"
+
         store = json.loads(data)
-        df    = pd.read_json(io.StringIO(store["df"]), orient="split")
+        df = pd.read_json(io.StringIO(store["df"]), orient="split")
 
+        # Conversión explícita de fechas
+        df["Fecha_dt"] = df["Fecha"].apply(parse_fecha)
+
+        # Aplicar filtros de fechas
+        if start_date and end_date:
+            fi = parse_fecha(start_date)
+            ff = parse_fecha(end_date)
+            df = df[(df["Fecha_dt"] >= fi) & (df["Fecha_dt"] <= ff)]
+
+        # Aplicar filtros de rubro/subrubro/medio
+        if rubro:
+            df = df[df["Rubro Principal"] == rubro]
+        if subrubro:
+            df = df[df["Sub-rubro"] == subrubro]
+        if medio:
+            df = df[df["Medio de Pago"] == medio]
+
+        # Si después de filtrar no hay datos
         if df.empty:
-            return [], empty_fig, empty_fig, empty_fig, empty_fig, [], "0 registros"
+            return [], go.Figure(), go.Figure(), go.Figure(), go.Figure(), [], "0 registros"
 
-        # ── BUG FIX 1: pd.read_json puede devolver "Importe" como object/string.
-        # Forzar conversion numerica antes de cualquier operacion matematica.
-        df["Importe"] = pd.to_numeric(df["Importe"], errors="coerce")
-
-        # ── BUG FIX 2: columnas de texto pueden tener NaN despues de read_json;
-        # convertirlas a str limpio para que groupby y isin funcionen correctamente.
-        for col in ("Rubro Principal", "Sub-rubro", "Medio de Pago", "Concepto"):
-            df[col] = df[col].fillna("").astype(str).str.strip()
-
-        # ── BUG FIX 3: fechas tz-aware (UTC) tras deserializar -> convertir a naive.
-        df["Fecha"] = (pd.to_datetime(df["Fecha"], utc=True)
-                         .dt.tz_convert(None)   # elimina timezone -> naive
-                         .dt.normalize())       # trunca a medianoche 00:00:00
-
-        # ── BUG FIX 4: regenerar "Mes" y "Fecha_str" desde las fechas normalizadas
-        # (no confiar en la version pre-computada del store, que puede desincronizarse).
-        df["Mes"]       = df["Fecha"].dt.to_period("M").astype(str)
-        df["Fecha_str"] = df["Fecha"].dt.strftime("%d/%m/%Y")
-
-        # Eliminar filas donde Fecha o Importe son invalidos
-        df = df.dropna(subset=["Fecha", "Importe"])
-
-        if df.empty:
-            return [], empty_fig, empty_fig, empty_fig, empty_fig, [], "0 registros"
-
-        # ── Aplicar filtros de fecha ──
-        if start_date:
-            start_ts = pd.Timestamp(start_date).normalize()
-            df = df[df["Fecha"] >= start_ts]
-        if end_date:
-            end_ts = pd.Timestamp(end_date).normalize()
-            df = df[df["Fecha"] <= end_ts]
-        if rubros:
-            df = df[df["Rubro Principal"].isin(rubros)]
-        if subrubros:
-            df = df[df["Sub-rubro"].isin(subrubros)]
-        if medios:
-            df = df[df["Medio de Pago"].isin(medios)]
-
-        if df.empty:
-            return [], empty_fig, empty_fig, empty_fig, empty_fig, [], "0 registros"
-
-        total       = df["Importe"].sum()
-        promedio    = df["Importe"].mean()
-        n_registros = len(df)
-        top_rubro   = df.groupby("Rubro Principal")["Importe"].sum().idxmax()
+# ── Cálculos KPI ──
+total       = df["Importe"].sum()
+n_registros = len(df)
+promedio    = df["Importe"].mean()
+top_rubro   = (df.groupby("Rubro Principal")["Importe"].sum()
+                 .reset_index()
+                 .sort_values("Importe", ascending=False)
+                 .iloc[0]["Rubro Principal"])
 
         # ── KPI cards ──
         kpis = dbc.Row([
@@ -706,16 +677,20 @@ def update_dashboard(data, start_date, end_date, rubros, subrubros, medios):
                                  yaxis=dict(showgrid=False))
 
         # ── Gráfico Medio de pago ──
-        medio_df  = df.groupby("Medio de Pago")["Importe"].sum().reset_index()
-        fig_medio = px.pie(
-            medio_df, values="Importe", names="Medio de Pago",
-            color_discrete_sequence=PALETTE, hole=0.45,
-        )
-        fig_medio.update_traces(textposition="inside", textinfo="percent+label",
-                                 textfont_size=12)
-        fig_medio.update_layout(**PLOTLY_LAYOUT)
+        medio_df = (df.groupby("Medio de Pago")["Importe"].sum()
+              .reset_index().sort_values("Importe", ascending=True))
+fig_medio = px.pie(
+    medio_df, names="Medio de Pago", values="Importe",
+    color="Medio de Pago", color_discrete_sequence=PALETTE,
+    hole=0.4
+)
+fig_medio.update_layout(**PLOTLY_LAYOUT)
+
+# Crear columna Mes desde Fecha_dt
+df["Mes"] = df["Fecha_dt"].dt.to_period("M").dt.to_timestamp()
 
         # ── Evolución mensual ──
+
         evol_df  = (df.groupby(["Mes", "Rubro Principal"])["Importe"].sum()
                       .reset_index().sort_values("Mes"))
         fig_evol = px.line(
@@ -729,29 +704,34 @@ def update_dashboard(data, start_date, end_date, rubros, subrubros, medios):
             yaxis=dict(showgrid=True, gridcolor="#30363d", tickformat="$,.0f"),
         )
 
-        # ── Top 8 Sub-rubros ──
-        sub_df  = (df.groupby("Sub-rubro")["Importe"].sum()
-                     .nlargest(8).reset_index().sort_values("Importe", ascending=True))
-        fig_sub = px.bar(
-            sub_df, x="Importe", y="Sub-rubro", orientation="h",
-            color="Sub-rubro", color_discrete_sequence=PALETTE,
-        )
-        fig_sub.update_layout(**PLOTLY_LAYOUT, showlegend=False,
-                               xaxis=dict(showgrid=True, gridcolor="#30363d",
-                                          tickformat="$,.0f"),
-                               yaxis=dict(showgrid=False))
+# ── Top 8 Sub-rubros ──
+sub_df = (df.groupby("Sub-rubro")["Importe"].sum()
+            .nlargest(8).reset_index()
+            .sort_values("Importe", ascending=True))
+
+fig_sub = px.bar(
+    sub_df, x="Importe", y="Sub-rubro", orientation="h",
+    color="Sub-rubro", color_discrete_sequence=PALETTE,
+    text=sub_df["Importe"].apply(lambda x: f"$ {x:,.0f}")
+)
+fig_sub.update_traces(textposition="outside", textfont_size=11)
+fig_sub.update_layout(**PLOTLY_LAYOUT, showlegend=False,
+                      xaxis=dict(showgrid=True, gridcolor="#30363d", tickformat="$,.0f"),
+                      yaxis=dict(showgrid=False))
 
         # ── Tabla ──
-        df["Importe_fmt"] = df["Importe"].apply(lambda x: f"$ {x:,.2f}")
-        # "Fecha_str" ya fue regenerado desde fechas normalizadas
-        table_cols = ["Fecha_str", "Concepto", "Importe_fmt",
-                      "Rubro Principal", "Sub-rubro", "Medio de Pago"]
-        # Ordenar por datetime real, no por string DD/MM/YYYY
-        table_data = (df[table_cols + ["Fecha"]]
-                        .sort_values("Fecha", ascending=False)
-                        .drop(columns=["Fecha"])
-                        .to_dict("records"))
-        count_label = f"{n_registros} registros · Total: $ {total:,.0f}"
+df["Fecha_str"] = df["Fecha_dt"].dt.strftime("%d/%m/%Y")
+df["Importe_fmt"] = df["Importe"].apply(lambda x: f"$ {x:,.2f}")
+
+table_cols = ["Fecha_str", "Concepto", "Importe_fmt",
+              "Rubro Principal", "Sub-rubro", "Medio de Pago"]
+
+table_data = (df[table_cols + ["Fecha"]]
+                .sort_values("Fecha", ascending=False)
+                .drop(columns=["Fecha"])
+                .to_dict("records"))
+
+count_label = f"{n_registros} registros · Total: $ {total:,.0f}"
 
         return kpis, fig_rubro, fig_medio, fig_evol, fig_sub, table_data, count_label
 
