@@ -580,8 +580,8 @@ def populate_filters(data):
         listas = store.get("listas", {})
 
         if not df.empty:
-            # Conversión explícita con formato día/mes/año
-            df["Fecha"] = pd.to_datetime(df["Fecha"], format="%d/%m/%Y", errors="coerce")
+            # Las fechas vienen en ISO desde el dcc.Store (JSON), no en dd/mm/yyyy
+            df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
 
         # Prioridad: Listas maestras > valores únicos del DataFrame
         rubros = listas.get("rubros") or sorted(
@@ -638,8 +638,8 @@ def update_dashboard(data, start_date, end_date, rubro, subrubro, medio):
         store = json.loads(data)
         df = pd.read_json(io.StringIO(store["df"]), orient="split")
 
-        # Conversión explícita de fechas desde el sheet
-        df["Fecha_dt"] = pd.to_datetime(df["Fecha"], format="%d/%m/%Y", errors="coerce")
+        # Las fechas vienen en ISO desde el dcc.Store (JSON), no en dd/mm/yyyy
+        df["Fecha_dt"] = pd.to_datetime(df["Fecha"], errors="coerce")
 
         # Aplicar filtros de fechas
         if start_date and end_date:
@@ -647,13 +647,13 @@ def update_dashboard(data, start_date, end_date, rubro, subrubro, medio):
             ff = datetime.strptime(end_date, "%Y-%m-%d")
             df = df[(df["Fecha_dt"].dt.date >= fi.date()) & (df["Fecha_dt"].dt.date <= ff.date())]
 
-        # Aplicar filtros de rubro/subrubro/medio
+        # Aplicar filtros de rubro/subrubro/medio (multi=True → valor es lista)
         if rubro:
-            df = df[df["Rubro Principal"] == rubro]
+            df = df[df["Rubro Principal"].isin(rubro)]
         if subrubro:
-            df = df[df["Sub-rubro"] == subrubro]
+            df = df[df["Sub-rubro"].isin(subrubro)]
         if medio:
-            df = df[df["Medio de Pago"] == medio]
+            df = df[df["Medio de Pago"].isin(medio)]
 
         # Si después de filtrar no hay datos
         if df.empty:
