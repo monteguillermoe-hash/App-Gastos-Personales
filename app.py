@@ -232,47 +232,30 @@ def load_sheet_data():
         for col in ("Rubro Principal", "Sub-rubro", "Medio de Pago", "Concepto"):
             df[col] = df[col].astype(str).str.strip()
 
-        # ── FECHA: soporta dd/mm/yyyy, yyyy-mm-dd y serial numérico de Google Sheets ──
-        def parse_fecha(val):
-            s = str(val).strip()
-            if not s or s in ("", "nan", "None"):
-                return pd.NaT
-            # Serial numérico de Sheets (ej: 46200.0)
-            try:
-                n = float(s)
-                if 40000 < n < 60000:
-                    return pd.Timestamp("1899-12-30") + pd.Timedelta(days=n)
-            except (ValueError, TypeError):
-                pass
-            for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%m/%d/%Y"):
-                try:
-                    return pd.Timestamp(datetime.strptime(s, fmt))
-                except ValueError:
-                    pass
-            return pd.NaT
+        # ── LOG: primeras filas crudas para diagnóstico ──
+        print("\n🔍 DATOS CRUDOS (primeras 5 filas):")
+        print(f"   Fechas  : {df['Fecha'].head(5).tolist()}")
+        print(f"   Importes: {df['Importe'].head(5).tolist()}")
 
-        df["Fecha"] = df["Fecha"].apply(parse_fecha)
-
-        # ── IMPORTE: detecta formato por posición del último separador ──
-        # Regla: el ÚLTIMO separador (. o ,) es siempre el decimal
-        # Ejemplos: 6,666.67 → punto es decimal | 6.666,67 → coma es decimal
+        # ── IMPORTE: detecta separador por posición del ÚLTIMO separador ──
+        # Regla: el ÚLTIMO sep (. o ,) es el decimal
+        #   6,666.67  → punto más a la derecha → decimal=punto  → 6666.67
+        #   6.666,67  → coma  más a la derecha → decimal=coma   → 6666.67
+        #   6666,67   → solo coma              → decimal=coma   → 6666.67
         def parse_importe(val):
-            s = str(val).strip().replace("$", "").replace(" ", "").replace("\xa0", "")
-            if not s or s in ("nan", "None", "-", ""):
+            s = str(val).strip().replace("$","").replace(" ","").replace("\xa0","")
+            if not s or s in ("nan","None","-",""):
                 return None
-            tiene_punto = "." in s
-            tiene_coma  = "," in s
-            if tiene_punto and tiene_coma:
-                if s.rfind(".") > s.rfind(","):
-                    # Punto es decimal (formato internacional/US): 6,666.67
-                    s = s.replace(",", "")      # quitar separador de miles
-                else:
-                    # Coma es decimal (formato argentino): 6.666,67
-                    s = s.replace(".", "").replace(",", ".")
-            elif tiene_coma:
-                # Solo coma → decimal argentino: 6666,67
-                s = s.replace(",", ".")
-            # Solo punto → ya es float válido: 6666.67
+            dp = s.rfind(".")
+            dc = s.rfind(",")
+            if dp > 0 and dc > 0:
+                if dp > dc:          # US: 6,666.67
+                    s = s.replace(",","")
+                else:                # AR: 6.666,67
+                    s = s.replace(".","").replace(",",".")
+            elif dc > 0:             # solo coma: 6666,67 → 6666.67
+                s = s.replace(",",".")
+            # solo punto o sin separador → ya es float válido
             try:
                 return float(s)
             except (ValueError, TypeError):
@@ -280,14 +263,39 @@ def load_sheet_data():
 
         df["Importe"] = pd.to_numeric(df["Importe"].apply(parse_importe), errors="coerce")
 
+        # ── FECHA: dayfirst=True, soporta dd/mm/yyyy, yyyy-mm-dd y serial Sheets ──
+        def parse_fecha(val):
+            s = str(val).strip()
+            if not s or s in ("","nan","None"):
+                return pd.NaT
+            # Serial numérico de Google Sheets (ej: 46200.0)
+            try:
+                n = float(s)
+                if 40000 < n < 60000:
+                    return pd.Timestamp("1899-12-30") + pd.Timedelta(days=n)
+            except (ValueError, TypeError):
+                pass
+            for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y"):
+                try:
+                    return pd.Timestamp(datetime.strptime(s, fmt))
+                except ValueError:
+                    pass
+            # Último recurso: dayfirst
+            return pd.to_datetime(s, dayfirst=True, errors="coerce")
+
+        df["Fecha"] = df["Fecha"].apply(parse_fecha)
+
         antes = len(df)
         df = df.dropna(subset=["Fecha", "Importe"])
-        print(f"📊 Filas cargadas: {len(df)} de {antes} (descartadas: {antes - len(df)})")
+        print(f"📊 Filas válidas: {len(df)} de {antes} totales")
+        print(f"   Fechas parseadas (primeras 5): {df['Fecha'].head(5).tolist()}")
+        print(f"   Importes parseados (primeros 5): {df['Importe'].head(5).tolist()}")
+        print(f"   Rango de fechas: {df['Fecha'].min()} → {df['Fecha'].max()}")
 
         if df.empty:
             return pd.DataFrame(), {}, "empty"
 
-        df["Mes"]      = df["Fecha"].dt.to_period("M").astype(str)
+        df["Mes"]       = df["Fecha"].dt.to_period("M").astype(str)
         df["Fecha_str"] = df["Fecha"].dt.strftime("%d/%m/%Y")
 
         # 2. Listas maestras
@@ -621,7 +629,7 @@ def populate_filters(data):
         listas = store.get("listas", {})
 
         if not df.empty:
-            # Fechas vienen en ISO desde el dcc.Store (serializado con date_format="iso")
+            # Store serializa en ISO → no usar format fijo
             df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
 
         # Prioridad: Listas maestras > valores únicos del DataFrame
@@ -679,16 +687,24 @@ def update_dashboard(data, start_date, end_date, rubro, subrubro, medio):
         store = json.loads(data)
         df = pd.read_json(io.StringIO(store["df"]), orient="split")
 
-        # Fechas vienen en ISO desde el store
-        df["Fecha_dt"] = pd.to_datetime(df["Fecha"], errors="coerce")
+        # Store serializa en ISO → sin format fijo; normalizar a medianoche
+        df["Fecha_dt"] = pd.to_datetime(df["Fecha"], errors="coerce").dt.normalize()
 
-        # Aplicar filtro de fechas
+        # ── Filtro de fechas: comparar solo la parte DATE (sin hora) ──
         if start_date and end_date:
-            fi = pd.Timestamp(start_date)
-            ff = pd.Timestamp(end_date) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
-            df = df[(df["Fecha_dt"] >= fi) & (df["Fecha_dt"] <= ff)]
+            fi = pd.Timestamp(start_date).normalize()
+            ff = pd.Timestamp(end_date).normalize()
+            mask = (df["Fecha_dt"] >= fi) & (df["Fecha_dt"] <= ff)
+            print(f"\n🗓  Filtro fecha: {fi.date()} → {ff.date()}")
+            print(f"   Total antes del filtro: {len(df)}")
+            print(f"   Registros fuera del rango:")
+            fuera = df[~mask][["Fecha_dt","Importe","Concepto"]]
+            for _, row in fuera.iterrows():
+                print(f"     {row['Fecha_dt'].date()} | {row['Importe']} | {row['Concepto']}")
+            df = df[mask]
+            print(f"   Total después del filtro: {len(df)}")
 
-        # Aplicar filtros categóricos (multi=True → value es lista)
+        # ── Filtros categóricos (multi=True → value es lista) ──
         if rubro:
             df = df[df["Rubro Principal"].isin(rubro)]
         if subrubro:
