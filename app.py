@@ -315,6 +315,108 @@ def load_sheet_data():
 def index():
     return redirect("/dashboard/")
 
+# ──────────────────────────────────────────────
+# Ruta de diagnóstico: /debug
+# Abrí https://tu-app.onrender.com/debug
+# Muestra los datos CRUDOS de Google Sheets antes de cualquier parsing
+# ──────────────────────────────────────────────
+@server.route("/debug")
+def debug_data():
+    try:
+        from src.auth import get_google_credentials
+        creds = get_google_credentials()
+        service = build("sheets", "v4", credentials=creds)
+
+        # 1. Pedir con FORMATTED_VALUE para ver el texto real de las celdas
+        res_fmt = (service.spreadsheets().values()
+                          .get(spreadsheetId=SHEET_ID,
+                               range="Gastos Personales 2026!A:D",
+                               valueRenderOption="FORMATTED_VALUE")
+                          .execute())
+
+        # 2. Pedir con UNFORMATTED_VALUE para ver números/seriales
+        res_raw = (service.spreadsheets().values()
+                          .get(spreadsheetId=SHEET_ID,
+                               range="Gastos Personales 2026!A:D",
+                               valueRenderOption="UNFORMATTED_VALUE",
+                               dateTimeRenderOption="SERIAL_NUMBER")
+                          .execute())
+
+        fmt_rows = res_fmt.get("values", [])
+        raw_rows = res_raw.get("values", [])
+
+        EPOCH = pd.Timestamp("1899-12-30")
+
+        rows_html = []
+        header_fmt = fmt_rows[0] if fmt_rows else []
+        for i, (rf, rr) in enumerate(zip(fmt_rows[1:], raw_rows[1:]), start=2):
+            fecha_fmt = rf[0] if len(rf) > 0 else "?"
+            fecha_raw = rr[0] if len(rr) > 0 else "?"
+            importe_fmt = rf[3] if len(rf) > 3 else "?"
+            importe_raw = rr[3] if len(rr) > 3 else "?"
+
+            # Parsear fecha serial
+            fecha_parsed = "?"
+            try:
+                n = float(str(fecha_raw))
+                if 40000 < n < 60000:
+                    fecha_parsed = (EPOCH + pd.Timedelta(days=int(n))).strftime("%d/%m/%Y")
+                else:
+                    fecha_parsed = f"serial fuera de rango: {n}"
+            except:
+                # Es texto, no serial
+                fecha_parsed = f"TEXTO: {fecha_raw}"
+
+            # Detectar anomalías
+            anomalia = ""
+            if fecha_fmt != fecha_parsed and fecha_parsed != "?":
+                anomalia = f" ⚠️ DIFERENCIA: fmt={fecha_fmt} vs parsed={fecha_parsed}"
+
+            rows_html.append(
+                f"<tr style='background:{'#1a1a2e' if i%2==0 else '#16213e'}'>"
+                f"<td style='padding:4px 10px;color:#aaa'>{i}</td>"
+                f"<td style='padding:4px 10px;color:#0f3460'>{fecha_fmt}</td>"
+                f"<td style='padding:4px 10px;color:#e94560'>{fecha_raw}</td>"
+                f"<td style='padding:4px 10px;color:#00d4aa'>{fecha_parsed}</td>"
+                f"<td style='padding:4px 10px;color:#ffd700'>{importe_fmt}</td>"
+                f"<td style='padding:4px 10px;color:#90ee90'>{importe_raw}</td>"
+                f"<td style='padding:4px 10px;color:red;font-weight:bold'>{anomalia}</td>"
+                f"</tr>"
+            )
+
+        table_html = "\n".join(rows_html)
+
+        return f"""
+        <html><body style='background:#0d1117;color:#e6edf3;font-family:monospace;padding:20px'>
+        <h2 style='color:#00d4aa'>🔍 Debug — Datos crudos de Google Sheets</h2>
+        <p style='color:#8b949e'>
+            Columna FORMATTED = lo que ves en el sheet |
+            Columna RAW = serial/número sin formato |
+            Columna PARSED = cómo lo interpreta el código
+        </p>
+        <table style='border-collapse:collapse;width:100%;font-size:13px'>
+        <thead>
+          <tr style='background:#21262d'>
+            <th style='padding:6px 10px;color:#00d4aa'>#</th>
+            <th style='padding:6px 10px;color:#58a6ff'>Fecha FORMATTED</th>
+            <th style='padding:6px 10px;color:#f78166'>Fecha RAW (serial)</th>
+            <th style='padding:6px 10px;color:#00d4aa'>Fecha PARSED</th>
+            <th style='padding:6px 10px;color:#ffd700'>Importe FORMATTED</th>
+            <th style='padding:6px 10px;color:#90ee90'>Importe RAW</th>
+            <th style='padding:6px 10px;color:red'>Anomalía</th>
+          </tr>
+        </thead>
+        <tbody>{table_html}</tbody>
+        </table>
+        </body></html>
+        """, 200, {{"Content-Type": "text/html"}}
+
+    except Exception as e:
+        import traceback
+        return f"<pre style='color:red;background:#000;padding:20px'>{traceback.format_exc()}</pre>", 500
+
+
+
 
 # ──────────────────────────────────────────────
 # Paletas y estilos
