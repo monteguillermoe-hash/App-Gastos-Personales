@@ -61,10 +61,9 @@ app = Dash(
     suppress_callback_exceptions=True,
     title="💰 Gastos 2026",
     meta_tags=[
+        # viewport: único meta que se gestiona desde acá; el resto va en index_string
         {"name": "viewport",
          "content": "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"},
-        {"name": "apple-mobile-web-app-capable", "content": "yes"},
-        {"name": "theme-color",                  "content": "#0d1117"},
     ],
 )
 
@@ -75,9 +74,15 @@ app = Dash(
 def serve_manifest():
     return send_from_directory("assets", "manifest.json")
 
-@server.route("/sw.js")
+@server.route("/service-worker.js")
 def serve_sw():
-    return send_from_directory("assets", "sw.js")
+    # Content-Type correcto + sin cache para que el browser siempre
+    # reciba la versión más nueva del SW
+    response = send_from_directory("assets", "sw.js")
+    response.headers["Content-Type"]  = "application/javascript"
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Service-Worker-Allowed"] = "/"
+    return response
 
 
 app.index_string = """
@@ -88,8 +93,24 @@ app.index_string = """
         <title>{%title%}</title>
         {%favicon%}
         {%css%}
+
+        <!-- ═══ PWA ═══════════════════════════════════════════════ -->
         <link rel="manifest" href="/manifest.json">
-        <link rel="apple-touch-icon" href="/assets/icon-192.png">
+
+        <!-- Iconos estandar (Chrome, Edge, Firefox) -->
+        <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+        <link rel="icon" type="image/png" sizes="512x512" href="/assets/icon-512.png">
+
+        <!-- iOS: icono en pantalla de inicio + modo standalone -->
+        <link rel="apple-touch-icon"             href="/assets/icon-192.png">
+        <meta name="apple-mobile-web-app-capable"          content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title"            content="Gastos">
+
+        <!-- Color de barra de sistema en Android Chrome -->
+        <meta name="theme-color" content="#00ff99">
+        <!-- ════════════════════════════════════════════════════════ -->
+
     </head>
     <body>
         {%app_entry%}
@@ -101,9 +122,20 @@ app.index_string = """
         <script>
             if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function () {
-                    navigator.serviceWorker.register('/sw.js')
-                        .then(r  => console.log('SW registrado:', r.scope))
-                        .catch(e => console.log('SW error:', e));
+                    navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
+                        .then(function(reg) {
+                            console.log('[PWA] SW registrado. Scope:', reg.scope);
+                            if (reg.waiting) { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); }
+                            reg.addEventListener('updatefound', function () {
+                                var newSW = reg.installing;
+                                newSW.addEventListener('statechange', function () {
+                                    if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+                                        console.log('[PWA] Nueva version disponible.');
+                                    }
+                                });
+                            });
+                        })
+                        .catch(function(e) { console.error('[PWA] Error al registrar SW:', e); });
                 });
             }
         </script>
