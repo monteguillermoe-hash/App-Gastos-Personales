@@ -1,150 +1,83 @@
-/* ════════════════════════════════════════════════════
-   GASTOS PERSONALES 2026 — style.css
-   Fix: z-index dropdowns + overflow visible en cards
-   ════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   style.css — Gastos Personales 2026
+   Cargado automáticamente por Dash desde la carpeta assets/
+   ═══════════════════════════════════════════════════════════════ */
 
-/* ── 1. Dropdowns de Dash/React-Select ── */
 
-/* El menú desplegable siempre por encima de todo */
-.Select-menu-outer {
-    z-index: 2000 !important;
-    position: absolute !important;   /* absolute, NO relative */
-}
-
-/* El control (input visible) necesita contexto de apilamiento */
-.Select.is-open {
-    z-index: 2001 !important;
-}
-
-/* Nuevo React-Select (versión ≥ 5 que usa dash-core-components ≥ 2.x) */
-.dash-dropdown .Select__menu,
-.dash-dropdown .Select__menu-list,
-[class$="__menu"],
-[class$="-menu"] {
-    z-index: 2000 !important;
-    position: absolute !important;
-}
-
-/* ── 2. Eliminar overflow:hidden en contenedores que tapan el menú ── */
-
-/* Bootstrap cards y columnas */
-.card,
-.card-body,
-.card-header {
+/* ── Fila de filtros ───────────────────────────────────────────
+   Bootstrap ya maneja el wrapping con xs=12, pero estos estilos
+   refuerzan el comportamiento y eliminan cualquier superposición.
+   ─────────────────────────────────────────────────────────────── */
+#filters-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    /* Permitir que los menús desplegables se "salgan" del contenedor */
     overflow: visible !important;
 }
 
-/* Filas y columnas de Bootstrap */
-.row,
-[class^="col"],
-[class*=" col"] {
+/* Mobile: cada filtro ocupa toda la fila */
+#filters-row > div {
+    flex: 1 1 100%;
     overflow: visible !important;
 }
 
-/* Contenedores de Dash */
-.container,
-.container-fluid,
-.dash-dropdown {
+/* Desktop (≥ 768px): los filtros se acomodan en columnas */
+@media (min-width: 768px) {
+    #filters-row > div {
+        flex: 1;
+        min-width: 160px;
+    }
+}
+
+
+/* ── Dropdowns: z-index y overflow ────────────────────────────
+   Evita que los menús queden cortados por el card padre.
+   ─────────────────────────────────────────────────────────────── */
+.Select-menu-outer,
+.VirtualizedSelectFocusedOption,
+.dash-dropdown .Select-menu-outer {
+    z-index: 9999 !important;
     overflow: visible !important;
 }
 
-/* ── 3. DataTable: sí puede tener overflow-x para scroll horizontal ── */
-.dash-spreadsheet-container {
-    overflow-x: auto !important;
-    overflow-y: visible !important;
+/* El card padre de los filtros tampoco debe cortar */
+.card {
+    overflow: visible !important;
 }
 
-/* ── 4. Estilo general dark para los dropdowns ── */
-.Select-control {
-    background-color: #252d3d !important;
-    border-color: #30363d !important;
-    color: #e6edf3 !important;
-    border-radius: 6px !important;
+
+/* ── Gráficos: altura mínima en mobile ────────────────────────
+   Evita que los gráficos colapsen a una altura ridícula.
+   ─────────────────────────────────────────────────────────────── */
+@media (max-width: 575.98px) {
+    .js-plotly-plot,
+    .plotly-graph-div {
+        min-height: 260px !important;
+    }
+
+    /* Tabla: fuente y padding más compactos */
+    .dash-table-container .dash-spreadsheet td,
+    .dash-table-container .dash-spreadsheet th {
+        font-size: 0.78rem !important;
+        padding: 5px 6px !important;
+        white-space: nowrap;
+    }
+
+    /* Header: título más chico */
+    h2 {
+        font-size: 1.2rem !important;
+    }
 }
 
-.Select-value-label,
-.Select-placeholder,
-.Select-input > input {
-    color: #e6edf3 !important;
-}
 
-.Select-menu-outer {
-    background-color: #1a1f2e !important;
-    border: 1px solid #30363d !important;
-    border-radius: 6px !important;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
-}
-
-.Select-option {
-    background-color: #1a1f2e !important;
-    color: #e6edf3 !important;
-}
-
-.Select-option:hover,
-.Select-option.is-focused {
-    background-color: #252d3d !important;
-    color: #00d4aa !important;
-}
-
-.Select-option.is-selected {
-    background-color: #00d4aa22 !important;
-    color: #00d4aa !important;
-}
-
-/* Multi-value tags */
-.Select-value {
-    background-color: #00d4aa22 !important;
-    border-color: #00d4aa55 !important;
-    color: #00d4aa !important;
-    border-radius: 4px !important;
-}
-
-.Select-value-icon {
-    border-right-color: #00d4aa55 !important;
-    color: #00d4aa !important;
-}
-
-.Select-value-icon:hover {
-    background-color: #00d4aa44 !important;
-    color: #fff !important;
-}
-
-/* ── 5. DatePickerRange dark ── */
-.DateInput_input {
-    background-color: #252d3d !important;
-    color: #e6edf3 !important;
-    border-color: #30363d !important;
-    border-radius: 6px !important;
-}
-
-.DateRangePickerInput {
-    background-color: #252d3d !important;
-    border-color: #30363d !important;
-    border-radius: 6px !important;
-}
-
-.DayPicker,
-.DayPicker_portal,
-.DateRangePicker_picker {
-    z-index: 3000 !important;
-    background-color: #1a1f2e !important;
-}
-
-/* ── 6. Scrollbar personalizado ── */
-::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-
-::-webkit-scrollbar-track {
-    background: #0d1117;
-}
-
-::-webkit-scrollbar-thumb {
-    background: #30363d;
-    border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #00d4aa;
+/* ── PWA: comportamiento standalone ───────────────────────────
+   Cuando la app se abre instalada (sin chrome UI), quitar el
+   safe-area en iOS para que no quede espacio muerto arriba.
+   ─────────────────────────────────────────────────────────────── */
+@media (display-mode: standalone) {
+    body {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
 }
