@@ -110,7 +110,8 @@ app.index_string = """
         <title>{%title%}</title>
         {%favicon%}
         {%css%}
-        <meta name="theme-color" content="#0d1117">
+        <meta name="theme-color" content="#00ff99">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <link rel="manifest" href="/manifest.json">
         <link rel="apple-touch-icon" href="/icon-192.png">
         <meta name="apple-mobile-web-app-capable" content="yes">
