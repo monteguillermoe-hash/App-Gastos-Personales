@@ -110,39 +110,12 @@ app.index_string = """
         <title>{%title%}</title>
         {%favicon%}
         {%css%}
-
-        <!-- ═══ PWA ════════════════════════════════════════════════ -->
+        <meta name="theme-color" content="#0d1117">
         <link rel="manifest" href="/manifest.json">
-        <meta name="theme-color" content="#00ff99">
-
-        <!-- Iconos -->
-        <link rel="icon"             type="image/png" sizes="192x192" href="/icon-192.png">
-        <link rel="icon"             type="image/png" sizes="512x512" href="/icon-512.png">
-        <link rel="apple-touch-icon"                                  href="/icon-192.png">
-
-        <!-- iOS standalone -->
-        <meta name="apple-mobile-web-app-capable"          content="yes">
+        <link rel="apple-touch-icon" href="/icon-192.png">
+        <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-        <meta name="apple-mobile-web-app-title"            content="Gastos">
-        <!-- ════════════════════════════════════════════════════════ -->
-
-        <style>
-            /* Ajustes globales mobile-first */
-            @media (max-width: 576px) {
-                /* Reducir padding del contenedor principal en celular */
-                .container-fluid { padding-left: 10px !important; padding-right: 10px !important; }
-                /* Títulos más compactos */
-                h2 { font-size: 1.25rem !important; }
-                /* Gráficos: altura fija para no ocupar toda la pantalla */
-                .js-plotly-plot { min-height: 260px; }
-                /* Tabla: fuente y celdas más chicas */
-                .dash-table-container .dash-spreadsheet-container .dash-spreadsheet td,
-                .dash-table-container .dash-spreadsheet-container .dash-spreadsheet th {
-                    font-size: 0.78rem !important;
-                    padding: 5px 7px !important;
-                }
-            }
-        </style>
+        <meta name="apple-mobile-web-app-title" content="Gastos">
     </head>
     <body>
         {%app_entry%}
@@ -153,26 +126,10 @@ app.index_string = """
         </footer>
         <script>
             if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function () {
-                    navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
-                        .then(function(reg) {
-                            console.log('[PWA] SW registrado. Scope:', reg.scope);
-                            // Forzar activación si hay nueva versión esperando
-                            if (reg.waiting) {
-                                reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-                            }
-                            reg.addEventListener('updatefound', function () {
-                                var newSW = reg.installing;
-                                newSW.addEventListener('statechange', function () {
-                                    if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-                                        console.log('[PWA] Nueva version disponible.');
-                                    }
-                                });
-                            });
-                        })
-                        .catch(function(e) {
-                            console.error('[PWA] Error al registrar SW:', e);
-                        });
+                window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/service-worker.js')
+                    .then(reg => console.log('SW registrado'))
+                    .catch(err => console.log('SW error', err));
                 });
             }
         </script>
@@ -496,33 +453,24 @@ BG_DARK = "#0d1117"
 TEXT    = "#e6edf3"
 MUTED   = "#8b949e"
 
-PALETTE = px.colors.qualitative.Plotly
+PALETTE = ["#00d4aa", "#00b4ff", "#7000ff", "#ff0070", "#ffcc00"]
 PLOTLY_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(color=TEXT, family="Arial"),
-    margin=dict(t=32, b=16, l=8, r=8),   # más compacto → mejor en mobile
-    legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color=TEXT, size=11)),
-    autosize=True,
+    font=dict(color=TEXT, family="Inter, sans-serif"),
+    margin=dict(t=40, b=40, l=40, r=40),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    hoverlabel=dict(bgcolor="#161b22", font_size=13, font_family="Inter"),
 )
-
 
 def stat_card(title, value, icon, color=ACCENT):
     return dbc.Card(
         dbc.CardBody([
-            html.Div(icon, style={"fontSize": "1.7rem", "marginBottom": "2px"}),
-            html.P(title, style={"color": MUTED, "margin": "0",
-                                 "fontSize": "clamp(.72rem, 2vw, .85rem)"}),
-            html.H4(value, style={"color": color, "margin": "0", "fontWeight": "bold",
-                                  "fontSize": "clamp(.95rem, 3vw, 1.3rem)",
-                                  "wordBreak": "break-word"}),
-        ], style={"padding": "10px 8px"}),
-        style={
-            "background": BG_CARD,
-            "border": f"1px solid {color}22",
-            "borderRadius": "12px",
-            "textAlign": "center",
-        },
+            html.Div(icon, className="mb-2", style={"fontSize": "2rem"}),
+            html.P(title, className="text-muted small mb-1"),
+            html.H3(value, className="stat-value"),
+        ], className="stat-card"),
+        className="premium-card"
     )
 
 
@@ -546,10 +494,44 @@ FILTER_CARD_BODY_STYLE = {
     "zIndex": 900,
 }
 
+# ── Componentes de Filtros (Reutilizables) ──
+def get_filter_controls():
+    return [
+        html.Div([
+            html.Label("📅 Rango de fechas", className="text-muted small mb-1"),
+            dcc.DatePickerRange(
+                id="filter-dates",
+                display_format="DD/MM/YYYY",
+                style={"width": "100%"},
+            ),
+        ], className="mb-3"),
+        html.Div([
+            html.Label("📁 Rubro", className="text-muted small mb-1"),
+            dcc.Dropdown(
+                id="filter-rubro", multi=True, placeholder="Todos",
+                style=DROPDOWN_STYLE, optionHeight=38,
+            ),
+        ], className="mb-3"),
+        html.Div([
+            html.Label("🏷️ Sub-rubro", className="text-muted small mb-1"),
+            dcc.Dropdown(
+                id="filter-subrubro", multi=True, placeholder="Todos",
+                style=DROPDOWN_STYLE, optionHeight=38,
+            ),
+        ], className="mb-3"),
+        html.Div([
+            html.Label("💳 Medio de pago", className="text-muted small mb-1"),
+            dcc.Dropdown(
+                id="filter-medio", multi=True, placeholder="Todos",
+                style=DROPDOWN_STYLE, optionHeight=38,
+            ),
+        ], className="mb-3"),
+    ]
+
 app.layout = dbc.Container(
     fluid=True,
-    # En mobile el <style> del index_string reduce el padding a 10px
-    style={"background": BG_DARK, "minHeight": "100vh", "padding": "16px"},
+    className="fade-in",
+    style={"background": BG_DARK, "minHeight": "100vh", "padding": "20px"},
     children=[
         dcc.Store(id="store-data"),
         dcc.Interval(id="load-trigger", interval=500, max_intervals=1),
@@ -557,90 +539,99 @@ app.layout = dbc.Container(
         # ── Header ──
         dbc.Row([
             dbc.Col([
-                html.H2("💰 Gastos Personales 2026",
-                        style={"color": ACCENT, "margin": "0", "fontWeight": "bold",
-                               "fontSize": "clamp(1.1rem, 4vw, 1.6rem)"}),
-                html.P("Dashboard financiero · Google Sheets",
-                       style={"color": MUTED, "margin": "0", "fontSize": ".82rem"}),
-            ], xs=8, md=9),
+                html.H2("💰 Gastos 2026", className="fw-bold m-0", 
+                        style={"color": ACCENT, "letterSpacing": "-1px"}),
+                html.P("Dashboard Personal Premium", className="text-muted small m-0"),
+            ], xs=7, md=6),
             dbc.Col([
-                dbc.Button("🔄", id="btn-refresh", color="success",
-                           outline=True, size="sm",
-                           title="Actualizar datos",
-                           className="d-md-none me-1"),          # solo icono en mobile
-                dbc.Button("🔄 Actualizar", id="btn-refresh-md", color="success",
-                           outline=True, size="sm",
-                           className="d-none d-md-inline-block"), # texto en desktop
-            ], xs=4, md=3, className="text-end d-flex align-items-center justify-content-end"),
-        ], className="mb-3 align-items-center"),
+                dbc.Button("🔍 Filtros", id="open-offcanvas", color="info", outline=True, 
+                           size="sm", className="d-md-none me-2"),
+                dbc.Button("🔄", id="btn-refresh", color="success", outline=True, 
+                           size="sm", className="me-2"),
+            ], xs=5, md=6, className="text-end d-flex align-items-center justify-content-end"),
+        ], className="mb-4 align-items-center"),
 
-        # ── Estado ──
-        html.Div(id="alert-status"),
-
-        # ── Filtros ──
-        # FIX z-index: overflow visible en Card y CardBody
-        dbc.Card(
-            dbc.CardBody(
-                dbc.Row(id="filters-row", children=[
-                    dbc.Col([
-                        html.Label("📅 Rango de fechas",
-                                   style={"color": MUTED, "fontSize": ".85rem"}),
-                        dcc.DatePickerRange(
-                            id="filter-dates",
-                            display_format="DD/MM/YYYY",
-                            style={"width": "100%"},
-                        ),
-                    ], xs=12, md=3),
-
-                    dbc.Col([
-                        html.Label("📁 Rubro",
-                                   style={"color": MUTED, "fontSize": ".85rem"}),
-                        dcc.Dropdown(
-                            id="filter-rubro",
-                            multi=True,
-                            placeholder="Todos",
-                            style=DROPDOWN_STYLE,
-                            # optionHeight para textos largos
-                            optionHeight=38,
-                        ),
-                    ], xs=12, md=3, style={"overflow": "visible", "zIndex": 900}),
-
-                    dbc.Col([
-                        html.Label("🏷️ Sub-rubro",
-                                   style={"color": MUTED, "fontSize": ".85rem"}),
-                        dcc.Dropdown(
-                            id="filter-subrubro",
-                            multi=True,
-                            placeholder="Todos",
-                            style=DROPDOWN_STYLE,
-                            optionHeight=38,
-                        ),
-                    ], xs=12, md=3, style={"overflow": "visible", "zIndex": 850}),
-
-                    dbc.Col([
-                        html.Label("💳 Medio de pago",
-                                   style={"color": MUTED, "fontSize": ".85rem"}),
-                        dcc.Dropdown(
-                            id="filter-medio",
-                            multi=True,
-                            placeholder="Todos",
-                            style=DROPDOWN_STYLE,
-                            optionHeight=38,
-                        ),
-                    ], xs=12, md=3, style={"overflow": "visible", "zIndex": 800}),
-
-                ], className="g-3"),
-                style=FILTER_CARD_BODY_STYLE,
-            ),
-            style={
-                "background": BG_CARD,
-                "border": "1px solid #30363d",
-                "borderRadius": "12px",
-                "marginBottom": "20px",
-                # FIX CLAVE: el card no debe recortar el dropdown con overflow hidden
-                "overflow": "visible",
-            },
+        # ── Offcanvas (Filtros en Mobile) ──
+        dbc.Offcanvas(
+            [
+                html.H4("Filtros", className="text-accent mb-4"),
+                html.Div(get_filter_controls())
+            ],
+            id="offcanvas-filters",
+            title="Ajustar Vista",
+            is_open=False,
+            placement="end",
+            style={"background": "#161b22", "color": TEXT},
         ),
+
+        # ── Desktop Filters (Horizontal) ──
+        html.Div(
+            dbc.Card(
+                dbc.CardBody(
+                    dbc.Row([
+                        dbc.Col(c, md=3) for c in get_filter_controls()
+                    ], className="g-3")
+                ),
+                className="premium-card mb-4 d-none d-md-block"
+            )
+        ),
+
+        # ── KPIs ──
+        dbc.Row(id="kpi-row", className="mb-4 g-3"),
+
+        # ── Gráficos Fila 1 ──
+        dbc.Row([
+            dbc.Col(dbc.Card([
+                dbc.CardHeader("📊 Gastos por Rubro"),
+                dbc.CardBody(dcc.Graph(id="chart-rubro", config={"displayModeBar": False}))
+            ], className="premium-card"), xs=12, lg=6),
+            dbc.Col(dbc.Card([
+                dbc.CardHeader("🥧 Distribución por Medio"),
+                dbc.CardBody(dcc.Graph(id="chart-medio", config={"displayModeBar": False}))
+            ], className="premium-card"), xs=12, lg=6),
+        ], className="mb-4 g-3"),
+
+        # ── Gráficos Fila 2 ──
+        dbc.Row([
+            dbc.Col(dbc.Card([
+                dbc.CardHeader("📈 Evolución Mensual"),
+                dbc.CardBody(dcc.Graph(id="chart-evolucion", config={"displayModeBar": False}))
+            ], className="premium-card"), xs=12, lg=8),
+            dbc.Col(dbc.Card([
+                dbc.CardHeader("🏷️ Top Sub-rubros"),
+                dbc.CardBody(dcc.Graph(id="chart-subrubro", config={"displayModeBar": False}))
+            ], className="premium-card"), xs=12, lg=4),
+        ], className="mb-4 g-3"),
+
+        # ── Tabla ──
+        dbc.Card([
+            dbc.CardHeader(
+                dbc.Row([
+                    dbc.Col(html.Span("📋 Detalle de Gastos", className="fw-bold")),
+                    dbc.Col(html.Span(id="table-count", className="text-muted small"), className="text-end"),
+                ])
+            ),
+            dbc.CardBody([
+                dash_table.DataTable(
+                    id="tabla-gastos",
+                    columns=[
+                        {"name": "Fecha", "id": "Fecha_str"},
+                        {"name": "Concepto", "id": "Concepto"},
+                        {"name": "Importe ($)", "id": "Importe_fmt"},
+                        {"name": "Rubro", "id": "Rubro Principal"},
+                        {"name": "Sub-rubro", "id": "Sub-rubro"},
+                        {"name": "Medio", "id": "Medio de Pago"},
+                    ],
+                    page_size=15, sort_action="native", filter_action="native",
+                    style_table={"overflowX": "auto"},
+                    style_header={"backgroundColor": "#1f2937", "color": ACCENT, "fontWeight": "bold"},
+                    style_cell={"backgroundColor": "transparent", "color": TEXT, "padding": "10px"},
+                    style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "rgba(255,255,255,0.02)"}],
+                )
+            ]),
+        ], className="premium-card mb-5"),
+    ]
+)
 
 
         # ── KPI Cards ──
@@ -997,6 +988,17 @@ def update_dashboard(data, start_date, end_date, rubro, subrubro, medio):
         traceback.print_exc()
         return [], empty_fig, empty_fig, empty_fig, empty_fig, [], "Error en callback"
 
+
+# ── Toggle Offcanvas ──
+@app.callback(
+    Output("offcanvas-filters", "is_open"),
+    Input("open-offcanvas", "n_clicks"),
+    [dash.State("offcanvas-filters", "is_open")],
+)
+def toggle_offcanvas(n, is_open):
+    if n:
+        return not is_open
+    return is_open
 
 # ──────────────────────────────────────────────
 # Main

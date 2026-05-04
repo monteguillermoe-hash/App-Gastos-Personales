@@ -1,75 +1,199 @@
 /* ═══════════════════════════════════════════════════════════════
-   style.css — Gastos Personales 2026
-   Cargado automáticamente por Dash desde la carpeta assets/
+   GASTOS PERSONALES 2026 — Premium Design System
+   Modern dark mode, glassmorphism, and mobile optimization.
    ═══════════════════════════════════════════════════════════════ */
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-/* ── Fila de filtros ───────────────────────────────────────────
-   Bootstrap ya maneja el wrapping con xs=12, pero estos estilos
-   refuerzan el comportamiento y eliminan cualquier superposición.
-   ─────────────────────────────────────────────────────────────── */
-#filters-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-#filters-row > div {
-  flex: 1 1 100%;
-}
-@media (min-width: 768px) {
-  #filters-row > div {
-    flex: 1;
-  }
+:root {
+    --bg-dark: #0d1117;
+    --bg-card: rgba(26, 31, 46, 0.7);
+    --accent: #00d4aa;
+    --accent-glow: rgba(0, 212, 170, 0.3);
+    --text-primary: #e6edf3;
+    --text-muted: #8b949e;
+    --border: rgba(48, 54, 61, 0.5);
+    --glass-bg: rgba(255, 255, 255, 0.03);
+    --glass-border: rgba(255, 255, 255, 0.1);
 }
 
+body {
+    font-family: 'Inter', sans-serif !important;
+    background-color: var(--bg-dark) !important;
+    color: var(--text-primary) !important;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+}
 
-/* ── Dropdowns: z-index y overflow ────────────────────────────
-   Evita que los menús queden cortados por el card padre.
-   ─────────────────────────────────────────────────────────────── */
-.Select-menu-outer,
-.VirtualizedSelectFocusedOption,
-.dash-dropdown .Select-menu-outer {
+/* ── 1. Glassmorphism Cards ── */
+.premium-card {
+    background: var(--bg-card) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4) !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    overflow: visible !important; /* Crucial for dropdowns */
+}
+
+.premium-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px 0 rgba(0, 212, 170, 0.1) !important;
+}
+
+.card-header {
+    background: transparent !important;
+    border-bottom: 1px solid var(--border) !important;
+    padding: 1.25rem !important;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+/* ── 2. Stat Cards (KPIs) ── */
+.stat-card {
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 0.5rem 0;
+}
+
+/* ── 3. Modern Dropdowns ── */
+.dash-dropdown .Select-control {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 8px !important;
+    color: var(--text-primary) !important;
+}
+
+.Select-menu-outer {
+    background-color: #161b22 !important;
+    border: 1px solid var(--accent) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5) !important;
     z-index: 9999 !important;
-    overflow: visible !important;
 }
 
-/* El card padre de los filtros tampoco debe cortar */
-.card {
-    overflow: visible !important;
+.Select-option.is-focused {
+    background-color: var(--accent-glow) !important;
+    color: var(--accent) !important;
 }
 
+/* ── 4. DatePicker FIX (El problema del usuario) ── */
+.DateRangePicker {
+    width: 100%;
+}
 
-/* ── Gráficos: altura mínima en mobile ────────────────────────
-   Evita que los gráficos colapsen a una altura ridícula.
-   ─────────────────────────────────────────────────────────────── */
-@media (max-width: 575.98px) {
-    .js-plotly-plot,
-    .plotly-graph-div {
-        min-height: 260px !important;
+.DateRangePickerInput {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 8px !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.DateInput {
+    background: transparent !important;
+    width: 40% !important;
+}
+
+.DateInput_input {
+    background: transparent !important;
+    color: var(--text-primary) !important;
+    font-size: 0.9rem !important;
+    border-bottom: none !important;
+    padding: 8px !important;
+}
+
+/* Solución al solapamiento: z-index y posición */
+.DateRangePicker_picker {
+    z-index: 10000 !important;
+    top: 50px !important;
+}
+
+.DayPicker {
+    background-color: #161b22 !important;
+    color: var(--text-primary) !important;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.8) !important;
+    border-radius: 12px !important;
+}
+
+.CalendarDay__default {
+    background: transparent !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text-primary) !important;
+}
+
+.CalendarDay__selected {
+    background: var(--accent) !important;
+    color: #000 !important;
+}
+
+/* ── 5. Mobile Optimization (PWA Feel) ── */
+@media (max-width: 768px) {
+    .container-fluid {
+        padding: 12px !important;
+    }
+    
+    .premium-card {
+        margin-bottom: 16px !important;
     }
 
-    /* Tabla: fuente y padding más compactos */
-    .dash-table-container .dash-spreadsheet td,
-    .dash-table-container .dash-spreadsheet th {
-        font-size: 0.78rem !important;
-        padding: 5px 6px !important;
-        white-space: nowrap;
+    /* Evitar que el DatePicker rompa el layout */
+    .DateRangePicker_picker {
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        width: 90vw !important;
     }
 
-    /* Header: título más chico */
-    h2 {
-        font-size: 1.2rem !important;
+    /* Botón flotante para filtros en móvil (opcional, pero mejora UX) */
+    .mobile-filter-btn {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 1000;
+        border-radius: 50%;
+        width: 56px;
+        height: 56px;
+        box-shadow: 0 4px 12px var(--accent-glow);
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 }
 
+/* ── 6. Animations ── */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 
-/* ── PWA: comportamiento standalone ───────────────────────────
-   Cuando la app se abre instalada (sin chrome UI), quitar el
-   safe-area en iOS para que no quede espacio muerto arriba.
-   ─────────────────────────────────────────────────────────────── */
-@media (display-mode: standalone) {
-    body {
-        padding-top: env(safe-area-inset-top);
-        padding-bottom: env(safe-area-inset-bottom);
-    }
+.fade-in {
+    animation: fadeIn 0.5s ease forwards;
+}
+
+/* ── 7. Scrollbar ── */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-dark);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
 }

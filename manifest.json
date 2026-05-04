@@ -3,11 +3,11 @@
   "short_name": "Gastos",
   "description": "Dashboard financiero personal con Google Sheets",
   "start_url": "/dashboard/",
-  "scope": "/",
+  "scope": "/dashboard/",
   "display": "standalone",
-  "orientation": "portrait-primary",
-  "background_color": "#000000",
-  "theme_color": "#00ff99",
+  "orientation": "portrait",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
   "lang": "es",
   "icons": [
     {
