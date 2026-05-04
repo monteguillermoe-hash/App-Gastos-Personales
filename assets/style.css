@@ -9,33 +9,17 @@
    refuerzan el comportamiento y eliminan cualquier superposición.
    ─────────────────────────────────────────────────────────────── */
 #filters-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    /* Permitir que los menús desplegables se "salgan" del contenedor */
-    overflow: visible !important;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
-
-/* Mobile: cada filtro ocupa toda la fila */
-@media (max-width: 767.98px) {
-    #filters-row > div {
-        flex: 1 1 100% !important;
-        width: 100% !important;
-        margin-bottom: 10px;
-    }
-    
-    /* Forzar que el DatePickerRange ocupe todo el ancho */
-    .DateRangePicker, .DateRangePicker > div {
-        width: 100% !important;
-    }
+#filters-row > div {
+  flex: 1 1 100%;
 }
-
-/* Desktop (≥ 768px): los filtros se acomodan en columnas */
 @media (min-width: 768px) {
-    #filters-row > div {
-        flex: 1;
-        min-width: 160px;
-    }
+  #filters-row > div {
+    flex: 1;
+  }
 }
 
 
