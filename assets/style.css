@@ -197,3 +197,17 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--accent);
 }
+/* Filtros solicitados por el usuario */
+#filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+#filters-row > div {
+  flex: 1 1 100%;
+}
+@media (min-width: 768px) {
+  #filters-row > div {
+    flex: 1;
+  }
+}
