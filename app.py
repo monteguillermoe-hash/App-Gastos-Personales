@@ -494,39 +494,7 @@ FILTER_CARD_BODY_STYLE = {
     "zIndex": 900,
 }
 
-# ── Componentes de Filtros (Reutilizables) ──
-def get_filter_controls():
-    return [
-        html.Div([
-            html.Label("📅 Rango de fechas", className="text-muted small mb-1"),
-            dcc.DatePickerRange(
-                id="filter-dates",
-                display_format="DD/MM/YYYY",
-                style={"width": "100%"},
-            ),
-        ], className="mb-3"),
-        html.Div([
-            html.Label("📁 Rubro", className="text-muted small mb-1"),
-            dcc.Dropdown(
-                id="filter-rubro", multi=True, placeholder="Todos",
-                style=DROPDOWN_STYLE, optionHeight=38,
-            ),
-        ], className="mb-3"),
-        html.Div([
-            html.Label("🏷️ Sub-rubro", className="text-muted small mb-1"),
-            dcc.Dropdown(
-                id="filter-subrubro", multi=True, placeholder="Todos",
-                style=DROPDOWN_STYLE, optionHeight=38,
-            ),
-        ], className="mb-3"),
-        html.Div([
-            html.Label("💳 Medio de pago", className="text-muted small mb-1"),
-            dcc.Dropdown(
-                id="filter-medio", multi=True, placeholder="Todos",
-                style=DROPDOWN_STYLE, optionHeight=38,
-            ),
-        ], className="mb-3"),
-    ]
+
 
 app.layout = dbc.Container(
     fluid=True,
@@ -551,29 +519,45 @@ app.layout = dbc.Container(
             ], xs=5, md=6, className="text-end d-flex align-items-center justify-content-end"),
         ], className="mb-4 align-items-center"),
 
-        # ── Offcanvas (Filtros en Mobile) ──
-        dbc.Offcanvas(
-            [
-                html.H4("Filtros", className="text-accent mb-4"),
-                html.Div(get_filter_controls())
-            ],
-            id="offcanvas-filters",
-            title="Ajustar Vista",
-            is_open=False,
-            placement="end",
-            style={"background": "#161b22", "color": TEXT},
-        ),
+        # ── Filtros (Desktop & Mobile) ──
+        dbc.Card(
+            dbc.CardBody(
+                dbc.Row(id="filters-row", children=[
+                    dbc.Col([
+                        html.Label("📅 Rango de fechas", className="text-muted small mb-1"),
+                        dcc.DatePickerRange(
+                            id="filter-dates",
+                            display_format="DD/MM/YYYY",
+                            style={"width": "100%"},
+                        ),
+                    ], xs=12, md=3),
 
-        # ── Desktop Filters (Horizontal) ──
-        html.Div(
-            dbc.Card(
-                dbc.CardBody(
-                    dbc.Row([
-                        dbc.Col(c, md=3) for c in get_filter_controls()
-                    ], className="g-3")
-                ),
-                className="premium-card mb-4 d-none d-md-block"
-            )
+                    dbc.Col([
+                        html.Label("📁 Rubro", className="text-muted small mb-1"),
+                        dcc.Dropdown(
+                            id="filter-rubro", multi=True, placeholder="Todos",
+                            style=DROPDOWN_STYLE, optionHeight=38,
+                        ),
+                    ], xs=12, md=3),
+
+                    dbc.Col([
+                        html.Label("🏷️ Sub-rubro", className="text-muted small mb-1"),
+                        dcc.Dropdown(
+                            id="filter-subrubro", multi=True, placeholder="Todos",
+                            style=DROPDOWN_STYLE, optionHeight=38,
+                        ),
+                    ], xs=12, md=3),
+
+                    dbc.Col([
+                        html.Label("💳 Medio de pago", className="text-muted small mb-1"),
+                        dcc.Dropdown(
+                            id="filter-medio", multi=True, placeholder="Todos",
+                            style=DROPDOWN_STYLE, optionHeight=38,
+                        ),
+                    ], xs=12, md=3),
+                ], className="g-3"),
+            ),
+            className="premium-card mb-4"
         ),
 
         # ── KPIs ──
@@ -989,16 +973,7 @@ def update_dashboard(data, start_date, end_date, rubro, subrubro, medio):
         return [], empty_fig, empty_fig, empty_fig, empty_fig, [], "Error en callback"
 
 
-# ── Toggle Offcanvas ──
-@app.callback(
-    Output("offcanvas-filters", "is_open"),
-    Input("open-offcanvas", "n_clicks"),
-    [dash.State("offcanvas-filters", "is_open")],
-)
-def toggle_offcanvas(n, is_open):
-    if n:
-        return not is_open
-    return is_open
+
 
 # ──────────────────────────────────────────────
 # Main

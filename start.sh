@@ -1,6 +1,11 @@
 #!/bin/bash
-# Iniciar el bot en segundo plano
-python src/bot.py &
+# Iniciar el bot solo si existe
+if [ -f "src/bot.py" ]; then
+    python src/bot.py &
+elif [ -f "bot.py" ]; then
+    python bot.py &
+fi
 
 # Iniciar el dashboard de Dash con Gunicorn
-exec gunicorn src.app:server --bind 0.0.0.0:$PORT
+# app.py está en la raíz, por lo que usamos 'app:server'
+exec gunicorn app:server --bind 0.0.0.0:$PORT
