@@ -510,14 +510,14 @@ app.layout = dbc.Container(
                 html.H2("💰 Gastos 2026", className="fw-bold m-0", 
                         style={"color": ACCENT, "letterSpacing": "-1px"}),
                 html.P("Dashboard Personal Premium", className="text-muted small m-0"),
-            ], xs=7, md=6),
+            ], xs=8, md=6),
             dbc.Col([
-                dbc.Button("🔍 Filtros", id="open-offcanvas", color="info", outline=True, 
-                           size="sm", className="d-md-none me-2"),
-                dbc.Button("🔄", id="btn-refresh", color="success", outline=True, 
-                           size="sm", className="me-2"),
-            ], xs=5, md=6, className="text-end d-flex align-items-center justify-content-end"),
+                dbc.Button("🔄 Actualizar", id="btn-refresh", color="success", outline=True, 
+                           size="sm", className="ms-auto"),
+            ], xs=4, md=6, className="text-end d-flex align-items-center"),
         ], className="mb-4 align-items-center"),
+
+        html.Div(id="alert-status"),
 
         # ── Filtros (Desktop & Mobile) ──
         dbc.Card(
@@ -620,17 +620,18 @@ app.layout = dbc.Container(
 # ──────────────────────────────────────────────
 # Callbacks
 # ──────────────────────────────────────────────
+empty_fig = go.Figure().update_layout(**PLOTLY_LAYOUT)
 
 # 1. Carga inicial / Actualizar
 @app.callback(
     Output("store-data",   "data"),
     Output("alert-status", "children"),
     Input("load-trigger",    "n_intervals"),
-    Input("btn-refresh",     "n_clicks"),   # botón mobile (solo icono)
-    Input("btn-refresh-md",  "n_clicks"),   # botón desktop (con texto)
+    Input("btn-refresh",     "n_clicks"),
     prevent_initial_call=False,
 )
-def load_data(_, __, ___):
+def load_data(n_int, n_clicks):
+    print(f"🔄 load_data disparado! n_int={n_int}, n_clicks={n_clicks}")
     df, listas, status = load_sheet_data()
 
     if status == "no_auth":
@@ -730,6 +731,7 @@ def populate_filters(data):
     Input("filter-medio",     "value"),
 )
 def update_dashboard(data, start_date, end_date, rubro, subrubro, medio):
+    print(f"📊 update_dashboard disparado! data={bool(data)}, dates=({start_date} to {end_date})")
     try:
         if not data:
             return [], go.Figure(), go.Figure(), go.Figure(), go.Figure(), [], "0 registros"
