@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gastos-pwa-v8';
+const CACHE_NAME = 'gastos-pwa-v9';
 const ASSETS = [
   '/dashboard/',
   '/manifest.json',

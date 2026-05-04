@@ -787,10 +787,10 @@ def update_dashboard(data, start_date, end_date, rubro, subrubro, medio):
 
         # ── KPI cards ──
         kpis = dbc.Row([
-            dbc.Col(stat_card("Total Gastado",  f"$ {total:,.0f}",    "💸"),          xs=6, md=3),
-            dbc.Col(stat_card("Registros",      str(n_registros),      "📋", "#58a6ff"), xs=6, md=3),
-            dbc.Col(stat_card("Promedio/gasto", f"$ {promedio:,.0f}", "📊", "#d2a8ff"), xs=6, md=3),
-            dbc.Col(stat_card("Mayor rubro",    top_rubro,             "🏆", "#ffa657"), xs=6, md=3),
+            dbc.Col(stat_card("Total Gastado",  f"$ {total:,.0f}",    "💸"),          xs=12, md=6, lg=3),
+            dbc.Col(stat_card("Registros",      str(n_registros),      "📋", "#58a6ff"), xs=12, md=6, lg=3),
+            dbc.Col(stat_card("Promedio/gasto", f"$ {promedio:,.0f}", "📊", "#d2a8ff"), xs=12, md=6, lg=3),
+            dbc.Col(stat_card("Mayor rubro",    top_rubro,             "🏆", "#ffa657"), xs=12, md=6, lg=3),
         ], className="g-3")
 
         # ── Gráfico Rubro ──
