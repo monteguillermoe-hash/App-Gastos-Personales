@@ -590,7 +590,7 @@ app.layout = dbc.Container(
                             display_format="DD/MM/YYYY",
                             style={"width": "100%"},
                         ),
-                    ], xs=12, md=4),
+                    ], xs=12, md=3),
 
                     dbc.Col([
                         html.Label("📁 Rubro",
@@ -627,7 +627,7 @@ app.layout = dbc.Container(
                             style=DROPDOWN_STYLE,
                             optionHeight=38,
                         ),
-                    ], xs=12, md=2, style={"overflow": "visible", "zIndex": 800}),
+                    ], xs=12, md=3, style={"overflow": "visible", "zIndex": 800}),
 
                 ], className="g-3"),
                 style=FILTER_CARD_BODY_STYLE,
@@ -895,6 +895,13 @@ def update_dashboard(data, start_date, end_date, rubro, subrubro, medio):
             df = df[df["Sub-rubro"].isin(subrubro)]
         if medio:
             df = df[df["Medio de Pago"].isin(medio)]
+
+        # ── Limpieza de datos basura (ej: valor "1" o vacíos) ──
+        for col in ["Rubro Principal", "Sub-rubro", "Medio de Pago"]:
+            if col in df.columns:
+                df = df[df[col].notnull()]
+                df = df[df[col].astype(str).str.strip() != "1"]
+                df = df[df[col].astype(str).str.strip() != ""]
 
         # Si después de filtrar no hay datos
         if df.empty:
