@@ -1,16 +1,16 @@
 /* ═══════════════════════════════════════════════════════════════
-   style.css — Gastos Personales 2026
+   style.css — Gastos Personales
    Cargado automáticamente por Dash desde la carpeta assets/
    ═══════════════════════════════════════════════════════════════ */
 
 
-/* ── DatePickerRange: z-index para que el calendario no quede tapado ──── */
+/* ── DatePickerRange: el calendario no tapa KPIs ni otros filtros ────── */
 .DateRangePicker_picker {
     z-index: 1000 !important;
-    position: fixed !important;
+    position: relative !important;
 }
 
-/* El input del DatePicker ocupa el ancho del contenedor */
+/* El input del DatePicker ocupa el ancho disponible */
 .DateRangePicker,
 .DateRangePicker > div,
 .DateRangePickerInput {
@@ -19,35 +19,33 @@
 
 
 /* ── Fila de filtros ─────────────────────────────────────────────────────
-   id="filters-row" → separada visualmente de los KPIs con margen inferior
+   #filters-row → flex con wrap para que en mobile stackee verticalmente.
+   margin-bottom separa claramente el bloque de filtros del de KPIs.
    ──────────────────────────────────────────────────────────────────────── */
 #filters-row {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    margin-bottom: 20px;   /* separación clara entre filtros y KPIs */
+    margin-bottom: 20px;    /* separación clara con KPIs */
     overflow: visible !important;
 }
 
 /* Mobile: cada filtro ocupa toda la fila */
-@media (max-width: 767.98px) {
-    #filters-row > div {
-        flex: 1 1 100% !important;
-        width: 100% !important;
-        margin-bottom: 10px;
-    }
+#filters-row > div {
+    flex: 1 1 100%;
 }
 
-/* Desktop (≥ 768px): los filtros se acomodan en columnas */
+/* Desktop (≥ 768px): los filtros se distribuyen en columnas iguales */
 @media (min-width: 768px) {
     #filters-row > div {
         flex: 1;
-        min-width: 160px;
     }
 }
 
 
-/* ── KPI row: separación clara debajo de los filtros ──────────────────── */
+/* ── KPI row ─────────────────────────────────────────────────────────────
+   Separación clara entre filtros y KPIs.
+   ──────────────────────────────────────────────────────────────────────── */
 #kpi-row {
     margin-top: 0;
     margin-bottom: 24px;
@@ -55,7 +53,7 @@
 
 
 /* ── Dropdowns: z-index y overflow ───────────────────────────────────────
-   Evita que los menús queden cortados por el card padre.
+   Evita que el menú desplegable quede cortado por contenedores padres.
    ──────────────────────────────────────────────────────────────────────── */
 .Select-menu-outer,
 .VirtualizedSelectFocusedOption,
@@ -64,14 +62,13 @@
     overflow: visible !important;
 }
 
-/* El card padre de los filtros tampoco debe cortar */
 .card {
     overflow: visible !important;
 }
 
 
-/* ── Lista de ítems (Medio de Pago) ─────────────────────────────────────
-   Panel derecho del gráfico de torta, scrolleable en mobile
+/* ── Lista lateral de Medio de Pago ─────────────────────────────────────
+   Panel derecho del gráfico de torta.
    ──────────────────────────────────────────────────────────────────────── */
 #medio-items-list {
     overflow-y: auto;
@@ -90,7 +87,7 @@
 
 
 /* ── Gráficos: altura mínima en mobile ───────────────────────────────────
-   Evita que los gráficos colapsen a una altura ridícula.
+   Evita que los gráficos colapsen a una altura ridícula en pantallas chicas.
    ──────────────────────────────────────────────────────────────────────── */
 @media (max-width: 575.98px) {
     .js-plotly-plot,
@@ -98,7 +95,6 @@
         min-height: 260px !important;
     }
 
-    /* Tabla: fuente y padding más compactos */
     .dash-table-container .dash-spreadsheet td,
     .dash-table-container .dash-spreadsheet th {
         font-size: 0.78rem !important;
@@ -106,7 +102,6 @@
         white-space: nowrap;
     }
 
-    /* Header: título más chico */
     h2 {
         font-size: 1.2rem !important;
     }
@@ -114,8 +109,7 @@
 
 
 /* ── PWA: comportamiento standalone ─────────────────────────────────────
-   Cuando la app se abre instalada (sin chrome UI), quitar el
-   safe-area en iOS para que no quede espacio muerto arriba.
+   En iOS con la app instalada, respetar el safe-area del notch.
    ──────────────────────────────────────────────────────────────────────── */
 @media (display-mode: standalone) {
     body {

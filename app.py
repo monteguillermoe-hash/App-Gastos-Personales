@@ -565,7 +565,7 @@ app.layout = dbc.Container(
         # ── Header ──
         dbc.Row([
             dbc.Col([
-                html.H2("💰 Gastos Personales 2026",
+                html.H2("💰 Gastos Personales",
                         style={"color": ACCENT, "margin": "0", "fontWeight": "bold",
                                "fontSize": "clamp(1.1rem, 4vw, 1.6rem)"}),
                 html.P("Dashboard financiero · Google Sheets",
@@ -586,68 +586,59 @@ app.layout = dbc.Container(
         html.Div(id="alert-status"),
 
         # ── Filtros ──
-        # FIX z-index: overflow visible en Card y CardBody
-        dbc.Card(
-            dbc.CardBody(
-                dbc.Row(id="filters-row", children=[
-                    dbc.Col([
-                        html.Label("📅 Rango de fechas",
-                                   style={"color": MUTED, "fontSize": ".85rem"}),
-                        dcc.DatePickerRange(
-                            id="filter-dates",
-                            display_format="DD/MM/YYYY",
-                            style={"width": "100%"},
-                        ),
-                    ], xs=12, md=4),
+        # Sin Card wrapper → el #filters-row con flex/gap del CSS actúa directamente.
+        # overflow: visible en cada Col evita que el menú dropdown quede cortado.
+        dbc.Row(
+            id="filters-row",
+            children=[
+                dbc.Col([
+                    html.Label("📅 Rango de fechas",
+                               style={"color": MUTED, "fontSize": ".85rem"}),
+                    dcc.DatePickerRange(
+                        id="filter-dates",
+                        display_format="DD/MM/YYYY",
+                        style={"width": "100%"},
+                    ),
+                ], xs=12, md=3, style={"overflow": "visible"}),
 
-                    dbc.Col([
-                        html.Label("📁 Rubro",
-                                   style={"color": MUTED, "fontSize": ".85rem"}),
-                        dcc.Dropdown(
-                            id="filter-rubro",
-                            multi=True,
-                            placeholder="Todos",
-                            style=DROPDOWN_STYLE,
-                            # optionHeight para textos largos
-                            optionHeight=38,
-                        ),
-                    ], xs=12, md=3, style={"overflow": "visible", "zIndex": 900}),
+                dbc.Col([
+                    html.Label("📁 Rubro",
+                               style={"color": MUTED, "fontSize": ".85rem"}),
+                    dcc.Dropdown(
+                        id="filter-rubro",
+                        multi=True,
+                        placeholder="Todos",
+                        style=DROPDOWN_STYLE,
+                        optionHeight=38,
+                    ),
+                ], xs=12, md=3, style={"overflow": "visible", "zIndex": 900}),
 
-                    dbc.Col([
-                        html.Label("🏷️ Sub-rubro",
-                                   style={"color": MUTED, "fontSize": ".85rem"}),
-                        dcc.Dropdown(
-                            id="filter-subrubro",
-                            multi=True,
-                            placeholder="Todos",
-                            style=DROPDOWN_STYLE,
-                            optionHeight=38,
-                        ),
-                    ], xs=12, md=3, style={"overflow": "visible", "zIndex": 850}),
+                dbc.Col([
+                    html.Label("🏷️ Sub-rubro",
+                               style={"color": MUTED, "fontSize": ".85rem"}),
+                    dcc.Dropdown(
+                        id="filter-subrubro",
+                        multi=True,
+                        placeholder="Todos",
+                        style=DROPDOWN_STYLE,
+                        optionHeight=38,
+                    ),
+                ], xs=12, md=3, style={"overflow": "visible", "zIndex": 850}),
 
-                    dbc.Col([
-                        html.Label("💳 Medio de pago",
-                                   style={"color": MUTED, "fontSize": ".85rem"}),
-                        dcc.Dropdown(
-                            id="filter-medio",
-                            multi=True,
-                            placeholder="Todos",
-                            style=DROPDOWN_STYLE,
-                            optionHeight=38,
-                        ),
-                    ], xs=12, md=2, style={"overflow": "visible", "zIndex": 800}),
-
-                ], className="g-3"),
-                style=FILTER_CARD_BODY_STYLE,
-            ),
-            style={
-                "background": BG_CARD,
-                "border": "1px solid #30363d",
-                "borderRadius": "12px",
-                "marginBottom": "20px",
-                # FIX CLAVE: el card no debe recortar el dropdown con overflow hidden
-                "overflow": "visible",
-            },
+                dbc.Col([
+                    html.Label("💳 Medio de pago",
+                               style={"color": MUTED, "fontSize": ".85rem"}),
+                    dcc.Dropdown(
+                        id="filter-medio",
+                        multi=True,
+                        placeholder="Todos",
+                        style=DROPDOWN_STYLE,
+                        optionHeight=38,
+                    ),
+                ], xs=12, md=3, style={"overflow": "visible", "zIndex": 800}),
+            ],
+            className="g-3 mb-4",
+            style={"overflow": "visible"},
         ),
 
 
