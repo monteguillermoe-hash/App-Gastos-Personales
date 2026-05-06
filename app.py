@@ -59,7 +59,7 @@ app = Dash(
     # assets_folder cargará automáticamente assets/style.css
     external_stylesheets=[dbc.themes.CYBORG],
     suppress_callback_exceptions=True,
-    title="💰 Gastos 2026",
+    title="💰 Gastos Personales",
     meta_tags=[
         # Único meta gestionado por Dash; PWA y theme-color van en index_string
         {"name": "viewport",
@@ -594,12 +594,20 @@ app.layout = dbc.Container(
                 dbc.Col([
                     html.Label("📅 Rango de fechas",
                                style={"color": MUTED, "fontSize": ".85rem"}),
-                    dcc.DatePickerRange(
-                        id="filter-dates",
-                        display_format="DD/MM/YYYY",
-                        style={"width": "100%"},
+                    # El div position:relative + padding-bottom reserva espacio
+                    # para que el calendario (absolute) no empuje los filtros de abajo.
+                    html.Div(
+                        dcc.DatePickerRange(
+                            id="filter-dates",
+                            display_format="DD/MM/YYYY",
+                            style={"width": "100%"},
+                        ),
+                        style={
+                            "position": "relative",
+                            "zIndex": 1050,
+                        },
                     ),
-                ], xs=12, md=3, style={"overflow": "visible"}),
+                ], xs=12, md=3, style={"overflow": "visible", "zIndex": 1050}),
 
                 dbc.Col([
                     html.Label("📁 Rubro",

@@ -4,13 +4,17 @@
    ═══════════════════════════════════════════════════════════════ */
 
 
-/* ── DatePickerRange: el calendario no tapa KPIs ni otros filtros ────── */
+/* ── DatePickerRange ─────────────────────────────────────────────────────
+   position: absolute → el calendario flota por encima del resto de la UI
+   sin empujar los filtros de rubro/subrubro/medio de pago hacia abajo.
+   El contenedor padre tiene position:relative (definido en el Div de app.py).
+   ──────────────────────────────────────────────────────────────────────── */
 .DateRangePicker_picker {
-    z-index: 1000 !important;
-    position: relative !important;
+    z-index: 1050 !important;
+    position: absolute !important;
 }
 
-/* El input del DatePicker ocupa el ancho disponible */
+/* El input del DatePicker ocupa el ancho del contenedor */
 .DateRangePicker,
 .DateRangePicker > div,
 .DateRangePickerInput {
@@ -90,6 +94,11 @@
    Evita que los gráficos colapsen a una altura ridícula en pantallas chicas.
    ──────────────────────────────────────────────────────────────────────── */
 @media (max-width: 575.98px) {
+    .container-fluid {
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+    }
+
     .js-plotly-plot,
     .plotly-graph-div {
         min-height: 260px !important;
