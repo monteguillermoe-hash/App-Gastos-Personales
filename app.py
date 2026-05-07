@@ -518,18 +518,22 @@ PLOTLY_LAYOUT = dict(
 def stat_card(title, value, icon, color=ACCENT):
     return dbc.Card(
         dbc.CardBody([
-            html.Div(icon, style={"fontSize": "1.7rem", "marginBottom": "2px"}),
+            html.Div(icon, style={"fontSize": "1.5rem", "marginBottom": "2px"}),
             html.P(title, style={"color": MUTED, "margin": "0",
-                                 "fontSize": "clamp(.72rem, 2vw, .85rem)"}),
-            html.H4(value, style={"color": color, "margin": "0", "fontWeight": "bold",
-                                  "fontSize": "clamp(.95rem, 3vw, 1.3rem)",
-                                  "wordBreak": "break-word"}),
-        ], style={"padding": "10px 8px"}),
+                                 "fontSize": "clamp(.70rem, 2vw, .82rem)",
+                                 "lineHeight": "1.2"}),
+            html.H4(value, style={"color": color, "margin": "2px 0 0 0",
+                                  "fontWeight": "bold",
+                                  "fontSize": "clamp(1rem, 3.5vw, 1.35rem)",
+                                  "wordBreak": "break-word",
+                                  "lineHeight": "1.15"}),
+        ], style={"padding": "12px 8px"}),
         style={
             "background": BG_CARD,
-            "border": f"1px solid {color}22",
-            "borderRadius": "12px",
+            "border": f"1px solid {color}33",
+            "borderRadius": "14px",
             "textAlign": "center",
+            "height": "100%",
         },
     )
 
@@ -581,6 +585,30 @@ app.layout = dbc.Container(
                            className="d-none d-md-inline-block"), # texto en desktop
             ], xs=4, md=3, className="text-end d-flex align-items-center justify-content-end"),
         ], className="mb-3 align-items-center"),
+
+        # ── Banner PWA (solo mobile) ──
+        # Guía rápida para instalar la app en Android/iOS.
+        # d-md-none → solo visible en pantallas chicas.
+        html.Div([
+            html.Span("📲 ", style={"fontSize": "1rem"}),
+            html.Span("Instalá la app: ",
+                      style={"color": TEXT, "fontWeight": "600", "fontSize": ".82rem"}),
+            html.Span("Chrome › menú (⋮) › \u2018Añadir a pantalla principal\u2019",
+                      style={"color": MUTED, "fontSize": ".80rem"}),
+        ],
+        id="pwa-banner",
+        className="d-md-none",
+        style={
+            "background": "#0d2318",
+            "border": "1px solid #00d4aa44",
+            "borderRadius": "10px",
+            "padding": "8px 12px",
+            "marginBottom": "14px",
+            "display": "flex",
+            "alignItems": "center",
+            "gap": "4px",
+            "flexWrap": "wrap",
+        }),
 
         # ── Estado ──
         html.Div(id="alert-status"),
@@ -735,27 +763,29 @@ app.layout = dbc.Container(
                 dash_table.DataTable(
                     id="tabla-gastos",
                     columns=[
-                        {"name": "Fecha",       "id": "Fecha_str"},
-                        {"name": "Concepto",    "id": "Concepto"},
-                        {"name": "Importe ($)", "id": "Importe_fmt"},
-                        {"name": "Rubro",       "id": "Rubro Principal"},
-                        {"name": "Sub-rubro",   "id": "Sub-rubro"},
-                        {"name": "Medio",       "id": "Medio de Pago"},
+                        {"name": "Fecha",       "id": "Fecha_str",       "maxWidth": 90},
+                        {"name": "Concepto",    "id": "Concepto",        "maxWidth": 160},
+                        {"name": "Importe ($)", "id": "Importe_fmt",     "maxWidth": 100},
+                        {"name": "Rubro",       "id": "Rubro Principal", "maxWidth": 120},
+                        {"name": "Sub-rubro",   "id": "Sub-rubro",       "maxWidth": 120},
+                        {"name": "Medio",       "id": "Medio de Pago",   "maxWidth": 100},
                     ],
-                    page_size=15,
+                    page_size=10,
                     sort_action="native",
                     filter_action="native",
-                    style_table={"overflowX": "auto"},
+                    style_table={"overflowX": "auto", "minWidth": "100%"},
                     style_header={
                         "backgroundColor": "#1f2937", "color": ACCENT,
                         "fontWeight": "bold", "border": "1px solid #30363d",
+                        "fontSize": ".82rem",
                     },
                     style_cell={
                         "backgroundColor": BG_CARD, "color": TEXT,
-                        "border": "1px solid #30363d", "padding": "8px 12px",
-                        "fontSize": ".88rem", "fontFamily": "Arial",
-                        "maxWidth": "300px", "overflow": "hidden",
-                        "textOverflow": "ellipsis",
+                        "border": "1px solid #30363d",
+                        "padding": "7px 10px",
+                        "fontSize": ".84rem", "fontFamily": "Arial",
+                        "maxWidth": "160px", "overflow": "hidden",
+                        "textOverflow": "ellipsis", "whiteSpace": "nowrap",
                     },
                     style_data_conditional=[
                         {"if": {"row_index": "odd"}, "backgroundColor": "#161b22"},
