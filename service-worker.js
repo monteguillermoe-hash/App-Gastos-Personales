@@ -11,7 +11,7 @@
  * ─────────────────────────────────────────────────────────────────────────
  */
 
-const CACHE_VERSION = "gastos-v2";
+const CACHE_VERSION = "gastos-v3";
 
 // Shell mínimo que se pre-cachea al instalar
 const PRECACHE_URLS = [

@@ -29,7 +29,7 @@ from datetime import datetime
 def parse_fecha(fecha_str):
     return datetime.strptime(fecha_str, "%d/%m/%Y")
 from flask import Flask, redirect, request, send_from_directory
-from dash import Dash, dcc, html, dash_table, Input, Output
+from dash import Dash, dcc, html, dash_table, Input, Output, State, callback_context
 import dash_bootstrap_components as dbc
 from googleapiclient.discovery import build
 from src.auth import get_google_credentials
@@ -111,9 +111,12 @@ app.index_string = """
         {%favicon%}
         {%css%}
 
-        <!-- ═══ PWA ════════════════════════════════════════════════ -->
+        <!-- ═══ PWA ═══════════════════════════════════════════════════ -->
         <link rel="manifest" href="/manifest.json">
-        <meta name="theme-color" content="#00ff99">
+        <!-- viewport SIN maximum-scale/user-scalable: Chrome los usa para
+             bloquear el prompt de instalación en algunos dispositivos -->
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#00d4aa">
 
         <!-- Iconos -->
         <link rel="icon"             type="image/png" sizes="192x192" href="/icon-192.png">
@@ -124,61 +127,173 @@ app.index_string = """
         <meta name="apple-mobile-web-app-capable"          content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
         <meta name="apple-mobile-web-app-title"            content="Gastos">
-        <!-- ════════════════════════════════════════════════════════ -->
+        <!-- ════════════════════════════════════════════════════════════ -->
 
         <style>
-            /* Ajustes globales mobile-first */
+            /* Mobile-first globals */
             @media (max-width: 576px) {
-                /* Reducir padding del contenedor principal en celular */
                 .container-fluid { padding-left: 10px !important; padding-right: 10px !important; }
-                /* Títulos más compactos */
-                h2 { font-size: 1.25rem !important; }
-                /* Gráficos: altura fija para no ocupar toda la pantalla */
+                h2 { font-size: 1.2rem !important; }
                 .js-plotly-plot { min-height: 260px; }
-                /* Tabla: fuente y celdas más chicas */
-                .dash-table-container .dash-spreadsheet-container .dash-spreadsheet td,
-                .dash-table-container .dash-spreadsheet-container .dash-spreadsheet th {
-                    font-size: 0.78rem !important;
-                    padding: 5px 7px !important;
+                .dash-table-container .dash-spreadsheet td,
+                .dash-table-container .dash-spreadsheet th {
+                    font-size: 0.75rem !important;
+                    padding: 5px 6px !important;
                 }
+            }
+
+            /* ── Floating Install Button (FAB) ────────────────────────
+               Se muestra solo cuando beforeinstallprompt dispara (Android)
+               o cuando se detecta iOS Safari sin estar instalado.
+               ──────────────────────────────────────────────────────── */
+            #pwa-fab {
+                display: none;
+                position: fixed;
+                bottom: 24px;
+                right: 20px;
+                z-index: 99999;
+                background: linear-gradient(135deg, #00d4aa 0%, #00a878 100%);
+                color: #0d1117;
+                border: none;
+                border-radius: 28px;
+                padding: 14px 22px;
+                font-weight: 700;
+                font-size: .9rem;
+                font-family: Arial, sans-serif;
+                cursor: pointer;
+                box-shadow: 0 6px 24px rgba(0,212,170,0.5);
+                align-items: center;
+                gap: 8px;
+                transition: transform .15s, box-shadow .15s;
+                -webkit-tap-highlight-color: transparent;
+            }
+            #pwa-fab:active {
+                transform: scale(.96);
+                box-shadow: 0 3px 12px rgba(0,212,170,0.4);
+            }
+            #pwa-fab-close {
+                background: transparent;
+                border: none;
+                color: #0d1117;
+                font-size: 1.1rem;
+                cursor: pointer;
+                padding: 0 0 0 6px;
+                line-height: 1;
+            }
+
+            /* ── Filtro toggle button (solo mobile) ───────────────────*/
+            #btn-toggle-filters {
+                border-color: #30363d;
+                color: #8b949e;
+                background: #1a1f2e;
+                border-radius: 8px;
+                font-size: .8rem;
+            }
+            #btn-toggle-filters:active,
+            #btn-toggle-filters.active-filter {
+                border-color: #00d4aa;
+                color: #00d4aa;
             }
         </style>
     </head>
     <body>
+        <!-- FAB de instalación PWA —
+             Android/Chrome: aparece cuando beforeinstallprompt dispara.
+             iOS/Safari: aparece con instrucciones de Share.
+             Se oculta con la X o tras instalar. -->
+        <button id="pwa-fab" onclick="installPWA()">
+            <span id="pwa-fab-text">📲 Instalar app</span>
+            <button id="pwa-fab-close"
+                    onclick="event.stopPropagation(); hideFab();"
+                    title="Cerrar">&times;</button>
+        </button>
+
         {%app_entry%}
         <footer>
             {%config%}
             {%scripts%}
             {%renderer%}
         </footer>
+
         <script>
-            if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function () {
-                    navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
-                        .then(function(reg) {
-                            console.log('[PWA] SW registrado. Scope:', reg.scope);
-                            // Forzar activación si hay nueva versión esperando
-                            if (reg.waiting) {
-                                reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-                            }
-                            reg.addEventListener('updatefound', function () {
-                                var newSW = reg.installing;
-                                newSW.addEventListener('statechange', function () {
-                                    if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-                                        console.log('[PWA] Nueva version disponible.');
-                                    }
-                                });
+        /* ════════ SERVICE WORKER ══════════════════════════════════════ */
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
+                    .then(function(reg) {
+                        console.log('[SW] Registrado. Scope:', reg.scope);
+                        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                        reg.addEventListener('updatefound', function () {
+                            var nw = reg.installing;
+                            nw.addEventListener('statechange', function () {
+                                if (nw.state === 'installed' && navigator.serviceWorker.controller)
+                                    console.log('[SW] Nueva versión disponible.');
                             });
-                        })
-                        .catch(function(e) {
-                            console.error('[PWA] Error al registrar SW:', e);
                         });
-                });
+                    })
+                    .catch(function(e) { console.error('[SW] Error:', e); });
+            });
+        }
+
+        /* ════════ PWA INSTALL BUTTON ══════════════════════════════════
+           El evento beforeinstallprompt indica que el navegador ya
+           validó todos los criterios (HTTPS + manifest válido + SW activo).
+           Lo capturamos y lo mostramos al hacer click en el FAB.
+           En iOS/Safari no existe el evento: mostramos instrucciones.
+           ══════════════════════════════════════════════════════════════ */
+        var _pwaPrompt = null;
+        var _isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+        var _isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                         || navigator.standalone === true;
+
+        /* Android / Chrome: capturar el prompt */
+        window.addEventListener('beforeinstallprompt', function(e) {
+            e.preventDefault();
+            _pwaPrompt = e;
+            console.log('[PWA] beforeinstallprompt capturado — mostrando FAB');
+            document.getElementById('pwa-fab-text').textContent = '📲 Instalar app';
+            showFab();
+        });
+
+        /* iOS Safari: mostrar instrucciones Share → Añadir */
+        window.addEventListener('load', function() {
+            if (_isIOS && !_isStandalone) {
+                document.getElementById('pwa-fab-text').textContent =
+                    '📤 Instalar: Compartir › Añadir';
+                showFab();
             }
+        });
+
+        /* Una vez instalada, ocultar el FAB */
+        window.addEventListener('appinstalled', function() {
+            _pwaPrompt = null;
+            hideFab();
+            console.log('[PWA] ¡App instalada!');
+        });
+
+        function showFab() {
+            var fab = document.getElementById('pwa-fab');
+            if (fab) fab.style.display = 'flex';
+        }
+        function hideFab() {
+            var fab = document.getElementById('pwa-fab');
+            if (fab) fab.style.display = 'none';
+        }
+        function installPWA() {
+            /* iOS: no hay prompt, el click no hace nada (texto ya explica cómo) */
+            if (!_pwaPrompt) return;
+            _pwaPrompt.prompt();
+            _pwaPrompt.userChoice.then(function(r) {
+                console.log('[PWA] Resultado:', r.outcome);
+                _pwaPrompt = null;
+                if (r.outcome === 'accepted') hideFab();
+            });
+        }
         </script>
     </body>
 </html>
 """
+
 
 
 # ──────────────────────────────────────────────
@@ -586,95 +701,85 @@ app.layout = dbc.Container(
             ], xs=4, md=3, className="text-end d-flex align-items-center justify-content-end"),
         ], className="mb-3 align-items-center"),
 
-        # ── Banner PWA (solo mobile) ──
-        # Guía rápida para instalar la app en Android/iOS.
-        # d-md-none → solo visible en pantallas chicas.
-        html.Div([
-            html.Span("📲 ", style={"fontSize": "1rem"}),
-            html.Span("Instalá la app: ",
-                      style={"color": TEXT, "fontWeight": "600", "fontSize": ".82rem"}),
-            html.Span("Chrome › menú (⋮) › \u2018Añadir a pantalla principal\u2019",
-                      style={"color": MUTED, "fontSize": ".80rem"}),
-        ],
-        id="pwa-banner",
-        className="d-md-none",
-        style={
-            "background": "#0d2318",
-            "border": "1px solid #00d4aa44",
-            "borderRadius": "10px",
-            "padding": "8px 12px",
-            "marginBottom": "14px",
-            "display": "flex",
-            "alignItems": "center",
-            "gap": "4px",
-            "flexWrap": "wrap",
-        }),
 
         # ── Estado ──
         html.Div(id="alert-status"),
 
-        # ── Filtros ──
-        # Sin Card wrapper → el #filters-row con flex/gap del CSS actúa directamente.
-        # overflow: visible en cada Col evita que el menú dropdown quede cortado.
-        dbc.Row(
-            id="filters-row",
+        # ── Botón filtrar (solo mobile) ──
+        html.Div(
+            dbc.Button(
+                ["🔍 Filtrar ",
+                 dbc.Badge("0", id="badge-filtros", color="success",
+                           className="ms-1", pill=True)],
+                id="btn-toggle-filters",
+                size="sm",
+                className="d-md-none mb-2",
+                n_clicks=0,
+            ),
+            className="d-md-none",
+        ),
+
+        # ── Filtros (colapsables en mobile, siempre visibles en desktop) ──
+        dbc.Collapse(
+            id="collapse-filters",
+            is_open=True,
             children=[
-                dbc.Col([
-                    html.Label("📅 Rango de fechas",
-                               style={"color": MUTED, "fontSize": ".85rem"}),
-                    # El div position:relative + padding-bottom reserva espacio
-                    # para que el calendario (absolute) no empuje los filtros de abajo.
-                    html.Div(
-                        dcc.DatePickerRange(
-                            id="filter-dates",
-                            display_format="DD/MM/YYYY",
-                            style={"width": "100%"},
-                        ),
-                        style={
-                            "position": "relative",
-                            "zIndex": 1050,
-                        },
-                    ),
-                ], xs=12, md=3, style={"overflow": "visible", "zIndex": 1050}),
+                dbc.Row(
+                    id="filters-row",
+                    children=[
+                        dbc.Col([
+                            html.Label("📅 Rango de fechas",
+                                       style={"color": MUTED, "fontSize": ".85rem"}),
+                            html.Div(
+                                dcc.DatePickerRange(
+                                    id="filter-dates",
+                                    display_format="DD/MM/YYYY",
+                                    style={"width": "100%"},
+                                ),
+                                style={"position": "relative", "zIndex": 1050},
+                            ),
+                        ], xs=12, md=3, style={"overflow": "visible", "zIndex": 1050}),
 
-                dbc.Col([
-                    html.Label("📁 Rubro",
-                               style={"color": MUTED, "fontSize": ".85rem"}),
-                    dcc.Dropdown(
-                        id="filter-rubro",
-                        multi=True,
-                        placeholder="Todos",
-                        style=DROPDOWN_STYLE,
-                        optionHeight=38,
-                    ),
-                ], xs=12, md=3, style={"overflow": "visible", "zIndex": 900}),
+                        dbc.Col([
+                            html.Label("📁 Rubro",
+                                       style={"color": MUTED, "fontSize": ".85rem"}),
+                            dcc.Dropdown(
+                                id="filter-rubro",
+                                multi=True,
+                                placeholder="Todos",
+                                style=DROPDOWN_STYLE,
+                                optionHeight=38,
+                            ),
+                        ], xs=12, md=3, style={"overflow": "visible", "zIndex": 900}),
 
-                dbc.Col([
-                    html.Label("🏷️ Sub-rubro",
-                               style={"color": MUTED, "fontSize": ".85rem"}),
-                    dcc.Dropdown(
-                        id="filter-subrubro",
-                        multi=True,
-                        placeholder="Todos",
-                        style=DROPDOWN_STYLE,
-                        optionHeight=38,
-                    ),
-                ], xs=12, md=3, style={"overflow": "visible", "zIndex": 850}),
+                        dbc.Col([
+                            html.Label("🏷️ Sub-rubro",
+                                       style={"color": MUTED, "fontSize": ".85rem"}),
+                            dcc.Dropdown(
+                                id="filter-subrubro",
+                                multi=True,
+                                placeholder="Todos",
+                                style=DROPDOWN_STYLE,
+                                optionHeight=38,
+                            ),
+                        ], xs=12, md=3, style={"overflow": "visible", "zIndex": 850}),
 
-                dbc.Col([
-                    html.Label("💳 Medio de pago",
-                               style={"color": MUTED, "fontSize": ".85rem"}),
-                    dcc.Dropdown(
-                        id="filter-medio",
-                        multi=True,
-                        placeholder="Todos",
-                        style=DROPDOWN_STYLE,
-                        optionHeight=38,
-                    ),
-                ], xs=12, md=3, style={"overflow": "visible", "zIndex": 800}),
+                        dbc.Col([
+                            html.Label("💳 Medio de pago",
+                                       style={"color": MUTED, "fontSize": ".85rem"}),
+                            dcc.Dropdown(
+                                id="filter-medio",
+                                multi=True,
+                                placeholder="Todos",
+                                style=DROPDOWN_STYLE,
+                                optionHeight=38,
+                            ),
+                        ], xs=12, md=3, style={"overflow": "visible", "zIndex": 800}),
+                    ],
+                    className="g-3 mb-4",
+                    style={"overflow": "visible"},
+                ),
             ],
-            className="g-3 mb-4",
-            style={"overflow": "visible"},
         ),
 
 
@@ -899,6 +1004,33 @@ def populate_filters(data):
         print("🔥 Error en populate_filters:")
         traceback.print_exc()
         return [], [], [], None, None, None, None
+
+# 2.5 Toggle filtros mobile
+@app.callback(
+    Output("collapse-filters", "is_open"),
+    Output("badge-filtros", "children"),
+    Input("btn-toggle-filters", "n_clicks"),
+    Input("filter-dates", "start_date"),
+    Input("filter-dates", "end_date"),
+    Input("filter-rubro", "value"),
+    Input("filter-subrubro", "value"),
+    Input("filter-medio", "value"),
+    State("collapse-filters", "is_open"),
+)
+def toggle_filters(n_clicks, start, end, rubro, subrubro, medio, is_open):
+    ctx = callback_context
+    trigger = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
+
+    # Contador de filtros activos
+    count = 0
+    if start and end: count += 1
+    if rubro: count += len(rubro)
+    if subrubro: count += len(subrubro)
+    if medio: count += len(medio)
+
+    if trigger == "btn-toggle-filters":
+        return not is_open, str(count)
+    return is_open, str(count)
 
 # 3. Actualizar dashboard
 @app.callback(
