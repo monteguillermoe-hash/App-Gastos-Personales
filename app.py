@@ -660,17 +660,7 @@ def stat_card(title, value, icon, color=ACCENT):
 # ── Estilos inline para que los dropdowns nunca queden tapados ──
 DROPDOWN_STYLE = {
     "background": "#252d3d",
-    # overflow visible es clave: sin esto el menú queda cortado por el card padre
     "overflow": "visible",
-    "position": "relative",
-    "zIndex": 1000,
-}
-
-FILTER_CARD_BODY_STYLE = {
-    # El CardBody también debe permitir overflow visible
-    "overflow": "visible",
-    "position": "relative",
-    "zIndex": 900,
 }
 
 app.layout = dbc.Container(
