@@ -736,9 +736,9 @@ app.layout = dbc.Container(
                                     display_format="DD/MM/YYYY",
                                     style={"width": "100%"},
                                 ),
-                                style={"position": "relative", "zIndex": 1050},
+                                style={"position": "relative"},
                             ),
-                        ], xs=12, md=3, style={"overflow": "visible", "zIndex": 1050}),
+                        ], xs=12, md=3, style={"overflow": "visible"}),
 
                         dbc.Col([
                             html.Label("📁 Rubro",
@@ -750,7 +750,7 @@ app.layout = dbc.Container(
                                 style=DROPDOWN_STYLE,
                                 optionHeight=38,
                             ),
-                        ], xs=12, md=3, style={"overflow": "visible", "zIndex": 900}),
+                        ], xs=12, md=3, style={"overflow": "visible"}),
 
                         dbc.Col([
                             html.Label("🏷️ Sub-rubro",
@@ -762,7 +762,7 @@ app.layout = dbc.Container(
                                 style=DROPDOWN_STYLE,
                                 optionHeight=38,
                             ),
-                        ], xs=12, md=3, style={"overflow": "visible", "zIndex": 850}),
+                        ], xs=12, md=3, style={"overflow": "visible"}),
 
                         dbc.Col([
                             html.Label("💳 Medio de pago",
@@ -774,7 +774,7 @@ app.layout = dbc.Container(
                                 style=DROPDOWN_STYLE,
                                 optionHeight=38,
                             ),
-                        ], xs=12, md=3, style={"overflow": "visible", "zIndex": 800}),
+                        ], xs=12, md=3, style={"overflow": "visible"}),
                     ],
                     className="g-3 mb-4",
                     style={"overflow": "visible"},
@@ -995,10 +995,20 @@ def populate_filters(data):
             rubros.append("Gasto Corriente")
 
         mk  = lambda lst: [{"label": v, "value": v} for v in lst]
-        mn  = df["Fecha"].min().date() if not df.empty else None
-        mx  = df["Fecha"].max().date() if not df.empty else None
 
-        return mk(rubros), mk(subrubros), mk(medios), mn, mx, mn, mx
+        # Rango por defecto: año actual completo
+        now = datetime.now()
+        first_day_year = pd.Timestamp(now.year, 1, 1).date()
+        last_day_year = pd.Timestamp(now.year, 12, 31).date()
+
+        mn = df["Fecha"].min().date() if not df.empty else first_day_year
+        mx = df["Fecha"].max().date() if not df.empty else last_day_year
+
+        # Ampliar el límite permitido para que siempre se pueda elegir desde enero
+        min_allowed = min(mn, first_day_year)
+        max_allowed = max(mx, last_day_year)
+
+        return mk(rubros), mk(subrubros), mk(medios), min_allowed, max_allowed, first_day_year, max_allowed
 
     except Exception:
         print("🔥 Error en populate_filters:")
