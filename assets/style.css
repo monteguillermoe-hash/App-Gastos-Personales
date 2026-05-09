@@ -66,6 +66,19 @@
     overflow: visible !important;
 }
 
+/* ── Z-Index dinámico para evitar solapamiento entre filtros ────────────
+   Cualquier filtro en el que estés interactuando pasa al frente.
+   ──────────────────────────────────────────────────────────────────────── */
+.filter-wrapper {
+    position: relative;
+    z-index: 10;
+}
+.filter-wrapper:focus-within,
+.filter-wrapper:has(.is-open),
+.filter-wrapper:has(.DateInput_input_focused) {
+    z-index: 99999 !important;
+}
+
 .card {
     overflow: visible !important;
 }
