@@ -738,7 +738,7 @@ app.layout = dbc.Container(
                                 ),
                                 style={"position": "relative"},
                             ),
-                        ], xs=12, md=3, className="filter-wrapper", style={"overflow": "visible"}),
+                        ], xs=12, md=3, style={"overflow": "visible"}),
 
                         dbc.Col([
                             html.Label("📁 Rubro",
@@ -750,7 +750,7 @@ app.layout = dbc.Container(
                                 style=DROPDOWN_STYLE,
                                 optionHeight=38,
                             ),
-                        ], xs=12, md=3, className="filter-wrapper", style={"overflow": "visible"}),
+                        ], xs=12, md=3, style={"overflow": "visible"}),
 
                         dbc.Col([
                             html.Label("🏷️ Sub-rubro",
@@ -762,7 +762,7 @@ app.layout = dbc.Container(
                                 style=DROPDOWN_STYLE,
                                 optionHeight=38,
                             ),
-                        ], xs=12, md=3, className="filter-wrapper", style={"overflow": "visible"}),
+                        ], xs=12, md=3, style={"overflow": "visible"}),
 
                         dbc.Col([
                             html.Label("💳 Medio de pago",
@@ -774,7 +774,7 @@ app.layout = dbc.Container(
                                 style=DROPDOWN_STYLE,
                                 optionHeight=38,
                             ),
-                        ], xs=12, md=3, className="filter-wrapper", style={"overflow": "visible"}),
+                        ], xs=12, md=3, style={"overflow": "visible"}),
                     ],
                     className="g-3 mb-4",
                     style={"overflow": "visible"},

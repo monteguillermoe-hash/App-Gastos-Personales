@@ -58,25 +58,19 @@
 
 /* ── Dropdowns: z-index y overflow ───────────────────────────────────────
    Evita que el menú desplegable quede cortado por contenedores padres.
+   Al hacer que .Select sea auto, evitamos que los dropdowns creen
+   sus propios contextos de apilamiento, permitiendo que .Select-menu-outer
+   (9998) siempre se dibuje por encima de los otros inputs.
    ──────────────────────────────────────────────────────────────────────── */
+.dash-dropdown .Select {
+    z-index: auto !important;
+}
+
 .Select-menu-outer,
 .VirtualizedSelectFocusedOption,
 .dash-dropdown .Select-menu-outer {
-    z-index: 9999 !important;
+    z-index: 9998 !important;
     overflow: visible !important;
-}
-
-/* ── Z-Index dinámico para evitar solapamiento entre filtros ────────────
-   Cualquier filtro en el que estés interactuando pasa al frente.
-   ──────────────────────────────────────────────────────────────────────── */
-.filter-wrapper {
-    position: relative;
-    z-index: 10;
-}
-.filter-wrapper:focus-within,
-.filter-wrapper:has(.is-open),
-.filter-wrapper:has(.DateInput_input_focused) {
-    z-index: 99999 !important;
 }
 
 .card {
